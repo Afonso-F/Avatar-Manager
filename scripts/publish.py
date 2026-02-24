@@ -9,8 +9,6 @@ Variáveis de ambiente necessárias (GitHub Secrets):
 """
 import os
 import sys
-import json
-import base64
 import logging
 import requests
 from datetime import datetime, timezone

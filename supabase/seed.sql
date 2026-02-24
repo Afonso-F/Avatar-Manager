@@ -1,0 +1,2 @@
+-- Dados de exemplo para desenvolvimento local
+-- Este ficheiro é carregado automaticamente pelo `supabase db reset`

@@ -30,9 +30,7 @@ jobs:
         run: |
           pip install --quiet \
             supabase==2.* \
-            google-generativeai==0.8.* \
-            requests==2.* \
-            Pillow==10.*
+            requests==2.*
 
       - name: Publicar posts agendados
         env:
