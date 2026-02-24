@@ -20,13 +20,6 @@ create table if not exists avatares (
   atualizado_em timestamptz default now()
 );
 
--- Seed de avatares padrão
-insert into avatares (nome, nicho, emoji, prompt_base, plataformas) values
-  ('Luna', 'Lifestyle & Wellness',  '🌙', 'Criativa, positiva, inspira o bem-estar e autenticidade',       array['instagram','tiktok']),
-  ('Aria', 'Tech & Productivity',   '⚡', 'Analítica, clara, simplifica tecnologia e produtividade',        array['instagram','youtube']),
-  ('Zara', 'Fashion & Beauty',      '✨', 'Elegante, trendy, apaixonada por moda sustentável',              array['instagram','tiktok','facebook']),
-  ('Nova', 'Fitness & Nutrition',   '🔥', 'Energética, motivadora, foco em saúde real e sem filtros',      array['instagram','youtube'])
-on conflict do nothing;
 
 -- ── Tabela: posts ────────────────────────────────────────────
 create table if not exists posts (
@@ -68,10 +61,32 @@ create index if not exists publicados_avatar_id_idx   on publicados(avatar_id);
 create index if not exists publicados_plataforma_idx  on publicados(plataforma);
 create index if not exists publicados_publicado_em_idx on publicados(publicado_em desc);
 
+-- ── Tabela: contas ───────────────────────────────────────────
+-- Armazena as contas de redes sociais associadas a cada avatar
+create table if not exists contas (
+  id            uuid primary key default gen_random_uuid(),
+  avatar_id     uuid references avatares(id) on delete cascade not null,
+  plataforma    text not null check (plataforma in ('instagram','tiktok','facebook','youtube')),
+  username      text,                    -- handle / nome de utilizador na plataforma
+  conta_id      text,                    -- ID da conta/página na plataforma (ex: IG business account ID)
+  access_token  text,                    -- token de acesso OAuth
+  token_expira  timestamptz,             -- data de expiração do token
+  ativo         boolean default true,
+  notas         text,
+  criado_em     timestamptz default now(),
+  atualizado_em timestamptz default now(),
+  unique(avatar_id, plataforma)          -- um avatar tem no máximo uma conta por plataforma
+);
+
+-- Índices para contas
+create index if not exists contas_avatar_id_idx  on contas(avatar_id);
+create index if not exists contas_plataforma_idx on contas(plataforma);
+
 -- ── Row Level Security ───────────────────────────────────────
 alter table avatares  enable row level security;
 alter table posts     enable row level security;
 alter table publicados enable row level security;
+alter table contas    enable row level security;
 
 -- Política: permitir tudo para utilizadores autenticados (ajusta conforme necessário)
 create policy "Allow all for authenticated" on avatares
@@ -81,6 +96,9 @@ create policy "Allow all for authenticated" on posts
   for all using (true) with check (true);
 
 create policy "Allow all for authenticated" on publicados
+  for all using (true) with check (true);
+
+create policy "Allow all for authenticated" on contas
   for all using (true) with check (true);
 
 -- ── Trigger: atualizar timestamp ─────────────────────────────
@@ -96,6 +114,9 @@ create trigger avatares_updated before update on avatares
   for each row execute function update_atualizado_em();
 
 create trigger posts_updated before update on posts
+  for each row execute function update_atualizado_em();
+
+create trigger contas_updated before update on contas
   for each row execute function update_atualizado_em();
 
 -- ── View: analytics ──────────────────────────────────────────
