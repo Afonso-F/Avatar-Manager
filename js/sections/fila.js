@@ -140,8 +140,83 @@ function setFilaPage(p) {
 }
 
 function editPost(id) {
-  // Navigate to criar with post data
-  app.toast('Em breve: edição de posts agendados', 'info');
+  const post = (_filaState.allPosts || []).find(p => String(p.id) === String(id));
+  if (!post) { app.toast('Post não encontrado', 'error'); return; }
+
+  const scheduleVal = post.agendado_para
+    ? new Date(post.agendado_para).toISOString().slice(0, 16)
+    : '';
+
+  const body = `
+    <div class="form-group">
+      <label class="form-label">Legenda</label>
+      <textarea id="edit-legenda" class="form-control" rows="4">${post.legenda || ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Hashtags</label>
+      <textarea id="edit-hashtags" class="form-control" rows="2" style="min-height:60px">${post.hashtags || ''}</textarea>
+    </div>
+    <div class="grid-2">
+      <div class="form-group mb-0">
+        <label class="form-label">Agendar para</label>
+        <input id="edit-schedule" type="datetime-local" class="form-control" value="${scheduleVal}">
+      </div>
+      <div class="form-group mb-0">
+        <label class="form-label">Status</label>
+        <select id="edit-status" class="form-control">
+          <option value="rascunho" ${post.status === 'rascunho' ? 'selected' : ''}>Rascunho</option>
+          <option value="agendado" ${post.status === 'agendado' ? 'selected' : ''}>Agendado</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group mt-3 mb-0">
+      <label class="form-label">Plataformas</label>
+      <div class="platform-toggles" id="edit-platforms">
+        ${['instagram','tiktok','facebook','youtube'].map(p => {
+          const active = (post.plataformas || []).includes(p);
+          return `<div class="platform-toggle${active ? ' active ' + p : ''}" data-p="${p}" onclick="togglePlatformModal(this)">${app.platformIcon(p)} ${p}</div>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveEditedPost('${id}')">
+      <i class="fa-solid fa-floppy-disk"></i> Guardar
+    </button>`;
+
+  app.openModal('Editar post', body, footer);
+}
+
+async function saveEditedPost(id) {
+  const legenda   = document.getElementById('edit-legenda').value.trim();
+  const hashtags  = document.getElementById('edit-hashtags').value.trim();
+  const schedule  = document.getElementById('edit-schedule').value;
+  const status    = document.getElementById('edit-status').value;
+  const platforms = [...document.querySelectorAll('#edit-platforms .platform-toggle.active')].map(el => el.dataset.p);
+
+  if (!legenda) { app.toast('Adiciona uma legenda', 'warning'); return; }
+
+  const updated = {
+    id,
+    legenda,
+    hashtags,
+    plataformas:   platforms,
+    status,
+    agendado_para: schedule ? new Date(schedule).toISOString() : null,
+  };
+
+  if (DB.ready()) {
+    const { error } = await DB.upsertPost(updated);
+    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+  }
+
+  const idx = (_filaState.allPosts || []).findIndex(p => String(p.id) === String(id));
+  if (idx >= 0) _filaState.allPosts[idx] = { ..._filaState.allPosts[idx], ...updated };
+
+  app.toast('Post atualizado!', 'success');
+  app.closeModal();
+  renderFilaList();
 }
 
 async function deleteFilaPost(id) {

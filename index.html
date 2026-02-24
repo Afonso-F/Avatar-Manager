@@ -61,6 +61,9 @@
           <span class="new-badge" id="newBadge" style="display:none">Novo</span>
         </button>
       </div>
+      <button id="logoutBtn" class="btn btn-sm btn-secondary" style="width:100%;margin-top:8px;display:none" onclick="app.authLogout()">
+        <i class="fa-solid fa-right-from-bracket"></i> <span>Sair</span>
+      </button>
     </div>
   </aside>
 
@@ -98,6 +101,37 @@
       </div>
       <div class="modal-body" id="modalBody"></div>
       <div class="modal-footer" id="modalFooter"></div>
+    </div>
+  </div>
+
+  <!-- Auth overlay (mostrado se sem sessão) -->
+  <div id="loginOverlay" style="display:none;position:fixed;inset:0;background:var(--bg-base);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:40px 36px;width:380px;max-width:94vw;box-shadow:var(--shadow)">
+      <div style="text-align:center;margin-bottom:28px">
+        <i class="fa-solid fa-wand-magic-sparkles" style="font-size:2.2rem;color:var(--accent)"></i>
+        <h2 style="margin-top:12px;font-size:1.4rem;font-weight:800">AvatarStudio</h2>
+        <p style="color:var(--text-muted);font-size:.85rem;margin-top:4px">Entra com a tua conta</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input id="login-email" class="form-control" type="email" placeholder="email@exemplo.com" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input id="login-password" class="form-control" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <div id="login-error" style="color:var(--red);font-size:.85rem;margin-bottom:12px;display:none"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" id="login-btn" onclick="app.authLogin()">
+        <i class="fa-solid fa-right-to-bracket"></i> Entrar
+      </button>
+    </div>
+  </div>
+
+  <!-- App splash (loading inicial) -->
+  <div id="appSplash" style="position:fixed;inset:0;background:var(--bg-base);z-index:9998;display:flex;align-items:center;justify-content:center">
+    <div style="text-align:center">
+      <i class="fa-solid fa-wand-magic-sparkles" style="font-size:2.5rem;color:var(--accent)"></i>
+      <div class="spinner" style="margin:18px auto 0;width:24px;height:24px"></div>
     </div>
   </div>
 

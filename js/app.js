@@ -33,6 +33,11 @@ const app = (() => {
       });
     });
 
+    // Enter no form de login
+    document.getElementById('login-password').addEventListener('keydown', e => {
+      if (e.key === 'Enter') authLogin();
+    });
+
     // Hash routing
     const hash = location.hash.replace('#', '') || 'dashboard';
     navigate(sections[hash] ? hash : 'dashboard');
@@ -40,8 +45,70 @@ const app = (() => {
     // Init Supabase
     initSupabase();
 
+    // Auth check
+    checkAuth();
+
     // Load version & features
     loadAppMeta();
+  }
+
+  /* ── Auth ── */
+  async function checkAuth() {
+    if (!DB.ready()) {
+      document.getElementById('appSplash')?.remove();
+      return;
+    }
+    const session = await DB.getSession();
+    document.getElementById('appSplash')?.remove();
+    if (!session) {
+      _showLogin();
+    } else {
+      _hideLogin();
+    }
+    DB.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN')  _hideLogin();
+      if (event === 'SIGNED_OUT') _showLogin();
+    });
+  }
+
+  function _showLogin() {
+    const ol = document.getElementById('loginOverlay');
+    if (ol) ol.style.display = 'flex';
+    const lb = document.getElementById('logoutBtn');
+    if (lb) lb.style.display = 'none';
+  }
+
+  function _hideLogin() {
+    const ol = document.getElementById('loginOverlay');
+    if (ol) ol.style.display = 'none';
+    const lb = document.getElementById('logoutBtn');
+    if (lb) lb.style.display = '';
+  }
+
+  async function authLogin() {
+    const email    = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const btn      = document.getElementById('login-btn');
+    const errEl    = document.getElementById('login-error');
+    if (!email || !password) {
+      errEl.textContent = 'Preenche email e password.';
+      errEl.style.display = 'block';
+      return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div> A entrar…';
+    errEl.style.display = 'none';
+    const { error } = await DB.signIn(email, password);
+    if (error) {
+      errEl.textContent = 'Email ou password incorretos.';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Entrar';
+    }
+  }
+
+  async function authLogout() {
+    await DB.signOut();
   }
 
   /* ── Load version.json, changelog.json, features.json ── */
@@ -218,7 +285,7 @@ const app = (() => {
   }
 
   /* ── Public API ── */
-  return { init, navigate, toast, openModal, closeModal, formatDate, formatNumber, platformIcon, statusBadge, setAvatares, getAvatares, getActiveAvatar, initSupabase, getFeature, openChangelogModal };
+  return { init, navigate, toast, openModal, closeModal, formatDate, formatNumber, platformIcon, statusBadge, setAvatares, getAvatares, getActiveAvatar, initSupabase, getFeature, openChangelogModal, authLogin, authLogout };
 })();
 
 document.addEventListener('DOMContentLoaded', () => app.init());

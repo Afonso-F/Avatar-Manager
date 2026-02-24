@@ -1,5 +1,21 @@
 [
   {
+    "version": "1.1.0",
+    "date": "2026-02-24",
+    "title": "Autenticação, edição de posts e publicação completa",
+    "type": "major",
+    "changes": [
+      "Login/logout com Supabase Auth — acesso protegido por password",
+      "Ecrã de login com splash screen e Enter para submeter",
+      "Botão de logout na sidebar",
+      "Edição completa de posts agendados na secção Fila",
+      "Imagens dos posts guardadas no Supabase Storage (bucket post-images)",
+      "URL pública da imagem associada automaticamente ao post",
+      "Publicação no TikTok via Content Posting API v2 (photo post)",
+      "Publicação no YouTube via Data API v3 (resumable upload)"
+    ]
+  },
+  {
     "version": "1.0.0",
     "date": "2026-02-24",
     "title": "Lançamento inicial",
