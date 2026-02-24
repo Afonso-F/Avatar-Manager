@@ -1,0 +1,51 @@
+name: Publicar Posts Agendados
+
+on:
+  schedule:
+    # Corre a cada hora
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (não publica, só mostra o que faria)'
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --quiet \
+            supabase==2.* \
+            google-generativeai==0.8.* \
+            requests==2.* \
+            Pillow==10.*
+
+      - name: Publicar posts agendados
+        env:
+          GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
+          INSTAGRAM_TOKEN:   ${{ secrets.INSTAGRAM_TOKEN }}
+          TIKTOK_TOKEN:      ${{ secrets.TIKTOK_TOKEN }}
+          FACEBOOK_TOKEN:    ${{ secrets.FACEBOOK_TOKEN }}
+          YOUTUBE_TOKEN:     ${{ secrets.YOUTUBE_TOKEN }}
+          DRY_RUN:           ${{ inputs.dry_run || 'false' }}
+        run: python scripts/publish.py
+
+      - name: Resumo
+        if: always()
+        run: echo "Workflow concluído — verificar logs acima"
