@@ -2,14 +2,15 @@
    app.js — Navegação, estado global, utils
    ============================================================ */
 const app = (() => {
+  // fn strings resolved at navigate-time so load order doesn't matter
   const sections = {
-    dashboard:      { title: 'Dashboard',      render: renderDashboard },
-    avatares:       { title: 'Avatares',        render: renderAvatares },
-    criar:          { title: 'Criar Post',      render: renderCriarPost },
-    fila:           { title: 'Fila / Agenda',   render: renderFila },
-    publicados:     { title: 'Publicados',      render: renderPublicados },
-    analises:       { title: 'Análises',        render: renderAnalises },
-    configuracoes:  { title: 'Configurações',   render: renderConfiguracoes },
+    dashboard:      { title: 'Dashboard',      fn: 'renderDashboard' },
+    avatares:       { title: 'Avatares',        fn: 'renderAvatares' },
+    criar:          { title: 'Criar Post',      fn: 'renderCriarPost' },
+    fila:           { title: 'Fila / Agenda',   fn: 'renderFila' },
+    publicados:     { title: 'Publicados',      fn: 'renderPublicados' },
+    analises:       { title: 'Análises',        fn: 'renderAnalises' },
+    configuracoes:  { title: 'Configurações',   fn: 'renderConfiguracoes' },
   };
 
   let current = 'dashboard';
@@ -68,10 +69,11 @@ const app = (() => {
     const btn = document.getElementById('topbarActionBtn');
     btn.style.display = section === 'criar' ? 'none' : 'inline-flex';
 
-    // Render section
+    // Render section — resolve fn at call-time (works regardless of script load order)
+    const renderFn = (typeof window !== 'undefined' ? window : global)[sections[section].fn];
     const content = document.getElementById('content');
     content.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>A carregar…</span></div>';
-    setTimeout(() => sections[section].render(content), 60);
+    setTimeout(() => renderFn(content), 60);
   }
 
   /* ── Toast ── */
