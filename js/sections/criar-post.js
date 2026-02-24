@@ -2,8 +2,10 @@
    sections/criar-post.js
    ============================================================ */
 let _criarState = {
-  imageDataUrl: null,
+  imageDataUrl:    null,
   imagePromptUsed: null,
+  videoDataUrl:    null,
+  contentType:     'image', // 'image' | 'video'
 };
 
 async function renderCriarPost(container) {
@@ -18,6 +20,8 @@ async function renderCriarPost(container) {
 
   const activeAvatar = app.getActiveAvatar() || avatares[0];
   _criarState.imageDataUrl = null;
+  _criarState.videoDataUrl = null;
+  _criarState.contentType  = 'image';
 
   container.innerHTML = `
     <div class="section-header">
@@ -115,33 +119,78 @@ async function renderCriarPost(container) {
         </div>
       </div>
 
-      <!-- Right: image panel -->
+      <!-- Right: media panel (imagem ou vídeo) -->
       <div style="display:flex;flex-direction:column;gap:16px">
         <div class="card">
-          <div class="card-header">
-            <div class="card-title">Imagem</div>
-            <button class="btn btn-sm btn-ghost" onclick="generateImage()"><i class="fa-solid fa-rotate"></i> Gerar</button>
-          </div>
-
-          <div class="image-preview-box" id="cp-img-preview">
-            <i class="fa-regular fa-image"></i>
-            <span>Clica em "Gerar" ou carrega uma imagem</span>
-          </div>
-
-          <div class="form-group mt-2 mb-1">
-            <label class="form-label">Prompt de imagem</label>
-            <textarea id="cp-img-prompt" class="form-control" rows="3" placeholder="Descreve a imagem que queres gerar…"></textarea>
-          </div>
-          <div class="flex gap-1">
-            <button class="btn btn-primary btn-sm flex-1" id="cp-gen-img-btn" onclick="generateImage()">
-              <i class="fa-solid fa-image"></i> Gerar imagem
+          <!-- Toggle Imagem / Vídeo -->
+          <div class="content-type-toggle mb-3">
+            <button class="type-btn active" id="cp-type-img" onclick="setContentType('image')">
+              <i class="fa-regular fa-image"></i> Imagem
             </button>
-            <label class="btn btn-secondary btn-sm" style="cursor:pointer">
-              <i class="fa-solid fa-upload"></i> Upload
-              <input type="file" accept="image/*" style="display:none" onchange="uploadImage(this)">
-            </label>
+            <button class="type-btn" id="cp-type-vid" onclick="setContentType('video')">
+              <i class="fa-solid fa-film"></i> Vídeo
+            </button>
           </div>
-          <div id="cp-img-status" class="text-sm text-muted mt-1"></div>
+
+          <!-- Painel de imagem -->
+          <div id="cp-img-panel">
+            <div class="card-header" style="padding:0;margin-bottom:12px">
+              <div class="card-title">Imagem</div>
+              <button class="btn btn-sm btn-ghost" onclick="generateImage()"><i class="fa-solid fa-rotate"></i> Gerar</button>
+            </div>
+            <div class="image-preview-box" id="cp-img-preview">
+              <i class="fa-regular fa-image"></i>
+              <span>Clica em "Gerar" ou carrega uma imagem</span>
+            </div>
+            <div class="form-group mt-2 mb-1">
+              <label class="form-label">Prompt de imagem</label>
+              <textarea id="cp-img-prompt" class="form-control" rows="3" placeholder="Descreve a imagem que queres gerar…"></textarea>
+            </div>
+            <div class="flex gap-1">
+              <button class="btn btn-primary btn-sm flex-1" id="cp-gen-img-btn" onclick="generateImage()">
+                <i class="fa-solid fa-image"></i> Gerar imagem
+              </button>
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+                <i class="fa-solid fa-upload"></i> Upload
+                <input type="file" accept="image/*" style="display:none" onchange="uploadImage(this)">
+              </label>
+            </div>
+            <div id="cp-img-status" class="text-sm text-muted mt-1"></div>
+          </div>
+
+          <!-- Painel de vídeo -->
+          <div id="cp-vid-panel" style="display:none">
+            <div class="card-header" style="padding:0;margin-bottom:12px">
+              <div class="card-title">Vídeo</div>
+              <button class="btn btn-sm btn-ghost" onclick="generateVidPrompt()"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar prompt</button>
+            </div>
+            <div class="video-preview-box" id="cp-vid-preview">
+              <i class="fa-solid fa-film"></i>
+              <span>Clica em "Gerar vídeo" ou faz upload</span>
+            </div>
+            <div class="form-group mt-2 mb-1">
+              <label class="form-label">Prompt de vídeo</label>
+              <textarea id="cp-vid-prompt" class="form-control" rows="3" placeholder="Descreve o vídeo que queres gerar…"></textarea>
+            </div>
+            <div class="form-group mb-1">
+              <label class="form-label">Formato</label>
+              <select id="cp-vid-ratio" class="form-control">
+                <option value="9:16">9:16 — TikTok / Reels (vertical)</option>
+                <option value="16:9">16:9 — YouTube (horizontal)</option>
+                <option value="1:1">1:1 — Feed (quadrado)</option>
+              </select>
+            </div>
+            <div class="flex gap-1">
+              <button class="btn btn-primary btn-sm flex-1" id="cp-gen-vid-btn" onclick="generateVideoPost()">
+                <i class="fa-solid fa-film"></i> Gerar vídeo com IA
+              </button>
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+                <i class="fa-solid fa-upload"></i> Upload
+                <input type="file" accept="video/*" style="display:none" onchange="uploadVideo(this)">
+              </label>
+            </div>
+            <div id="cp-vid-status" class="text-sm text-muted mt-1"></div>
+          </div>
         </div>
 
         <!-- Preview card -->
@@ -174,6 +223,24 @@ function defaultSchedule() {
 function getSelectedAvatarId() {
   const el = document.querySelector('[id^="av-sel-"].active');
   return el?.dataset.avid || app.getActiveAvatar()?.id;
+}
+
+/* Toggle entre painel de imagem e painel de vídeo */
+function setContentType(type) {
+  _criarState.contentType = type;
+  document.getElementById('cp-img-panel').style.display = type === 'image' ? '' : 'none';
+  document.getElementById('cp-vid-panel').style.display = type === 'video' ? '' : 'none';
+  document.getElementById('cp-type-img').classList.toggle('active', type === 'image');
+  document.getElementById('cp-type-vid').classList.toggle('active', type === 'video');
+  // Atualizar pré-visualização
+  const prevImg = document.getElementById('cp-preview-img');
+  if (prevImg && type === 'video' && _criarState.videoDataUrl) {
+    prevImg.innerHTML = `<video src="${_criarState.videoDataUrl}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover"></video>`;
+  } else if (prevImg && type === 'image' && _criarState.imageDataUrl) {
+    prevImg.innerHTML = `<img src="${_criarState.imageDataUrl}" alt="preview" style="width:100%;height:100%;object-fit:cover">`;
+  } else if (prevImg) {
+    prevImg.innerHTML = `<i class="fa-regular fa-${type === 'video' ? 'film' : 'image'}" style="font-size:2rem"></i>`;
+  }
 }
 
 function selectAvatar(id) {
@@ -227,7 +294,10 @@ async function generateCaption() {
   const btn    = document.querySelector('[onclick="generateCaption()"]');
   if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div>'; }
   try {
-    const text = await Gemini.generateCaption(avatar, topic);
+    // Carregar até 2 imagens de referência do avatar para contexto visual
+    const refUrls = (avatar.imagens_referencia || []).slice(0, 2);
+    const refImages = await _loadImagesAsDataUrls(refUrls);
+    const text = await Gemini.generateCaption(avatar, topic, refImages);
     document.getElementById('cp-caption').value = text;
     document.getElementById('cp-preview-caption').textContent = text;
     document.getElementById('cp-caption-count').textContent = `${text.length} caracteres`;
@@ -239,6 +309,22 @@ async function generateCaption() {
   }
 }
 
+/* Carrega imagens de URLs públicas como data URLs para enviar ao Gemini */
+async function _loadImagesAsDataUrls(urls) {
+  if (!urls.length) return [];
+  const results = await Promise.allSettled(urls.map(async url => {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }));
+  return results.filter(r => r.status === 'fulfilled').map(r => r.value);
+}
+
 async function generateHashtags() {
   const topic  = document.getElementById('cp-topic').value.trim() || 'lifestyle';
   const avatar = app.getActiveAvatar();
@@ -247,6 +333,19 @@ async function generateHashtags() {
     const text = await Gemini.generateHashtags(nicho, topic);
     document.getElementById('cp-hashtags').value = text;
     app.toast('Hashtags geradas!', 'success');
+  } catch (e) {
+    app.toast('Erro: ' + e.message, 'error');
+  }
+}
+
+/* Gerar prompt de vídeo com IA */
+async function generateVidPrompt() {
+  const topic  = document.getElementById('cp-topic').value.trim() || 'lifestyle';
+  const avatar = app.getActiveAvatar();
+  try {
+    const text = await Gemini.generateVideoPrompt(avatar, topic);
+    document.getElementById('cp-vid-prompt').value = text;
+    app.toast('Prompt de vídeo gerado!', 'success');
   } catch (e) {
     app.toast('Erro: ' + e.message, 'error');
   }
@@ -298,6 +397,72 @@ function uploadImage(input) {
   reader.readAsDataURL(file);
 }
 
+/* Gerar vídeo com Veo 2 */
+async function generateVideoPost() {
+  const prompt      = document.getElementById('cp-vid-prompt').value.trim();
+  const aspectRatio = document.getElementById('cp-vid-ratio').value;
+  if (!prompt) { app.toast('Escreve um prompt de vídeo', 'warning'); return; }
+
+  const btn    = document.getElementById('cp-gen-vid-btn');
+  const status = document.getElementById('cp-vid-status');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div> A gerar…';
+
+  let dots = 0;
+  const ticker = setInterval(() => {
+    dots = (dots % 3) + 1;
+    status.textContent = `A gerar vídeo com Veo 2${'…'.slice(0, dots)} (pode demorar até 5 min)`;
+  }, 800);
+
+  try {
+    const dataUrl = await Gemini.generateVideo(prompt, {
+      aspectRatio,
+      onProgress: (step, total) => {
+        const pct = Math.round((step / total) * 100);
+        status.textContent = `A processar vídeo… ${pct}%`;
+      }
+    });
+    _criarState.videoDataUrl = dataUrl;
+    setPreviewVideo(dataUrl);
+    app.toast('Vídeo gerado!', 'success');
+    status.textContent = '';
+  } catch (e) {
+    app.toast('Erro no vídeo: ' + e.message, 'error');
+    status.textContent = 'Erro: ' + e.message;
+  } finally {
+    clearInterval(ticker);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-film"></i> Gerar vídeo com IA';
+  }
+}
+
+function uploadVideo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const MAX_MB = 100;
+  if (file.size > MAX_MB * 1024 * 1024) {
+    app.toast(`Vídeo demasiado grande (máx. ${MAX_MB} MB)`, 'error');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    _criarState.videoDataUrl = e.target.result;
+    setPreviewVideo(e.target.result);
+    app.toast('Vídeo carregado!', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function setPreviewVideo(src) {
+  const box  = document.getElementById('cp-vid-preview');
+  const prev = document.getElementById('cp-preview-img');
+  if (box) {
+    box.className = 'video-preview-box has-video';
+    box.innerHTML = `<video src="${src}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover"></video>`;
+  }
+  if (prev) prev.innerHTML = `<video src="${src}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover"></video>`;
+}
+
 function setPreviewImage(src) {
   const box   = document.getElementById('cp-img-preview');
   const prev  = document.getElementById('cp-preview-img');
@@ -317,9 +482,11 @@ async function savePost(forceStatus) {
   if (!caption) { app.toast('Adiciona uma legenda ao post', 'warning'); return; }
   if (!platforms.length) { app.toast('Seleciona pelo menos uma plataforma', 'warning'); return; }
 
-  // Upload imagem para Supabase Storage se existir
+  const isVideo = _criarState.contentType === 'video';
   let imageUrl = null;
-  if (_criarState.imageDataUrl && DB.ready()) {
+  let videoUrl = null;
+
+  if (!isVideo && _criarState.imageDataUrl && DB.ready()) {
     const statusEl = document.getElementById('cp-img-status');
     if (statusEl) statusEl.textContent = 'A guardar imagem…';
     const { url, error: uploadErr } = await DB.uploadPostImage(_criarState.imageDataUrl, `post-${Date.now()}`);
@@ -331,15 +498,29 @@ async function savePost(forceStatus) {
     if (statusEl) statusEl.textContent = '';
   }
 
+  if (isVideo && _criarState.videoDataUrl && DB.ready()) {
+    const statusEl = document.getElementById('cp-vid-status');
+    if (statusEl) statusEl.textContent = 'A guardar vídeo…';
+    const { url, error: uploadErr } = await DB.uploadPostVideo(_criarState.videoDataUrl, `post-${Date.now()}`);
+    if (uploadErr) {
+      app.toast('Aviso: vídeo não guardado no Storage', 'warning');
+    } else {
+      videoUrl = url;
+    }
+    if (statusEl) statusEl.textContent = '';
+  }
+
   const post = {
-    avatar_id:     avatar?.id || null,
-    legenda:       caption,
-    hashtags:      hashtags,
-    plataformas:   platforms,
-    status:        status,
-    agendado_para: schedule ? new Date(schedule).toISOString() : null,
-    imagem_url:    imageUrl,
-    criado_em:     new Date().toISOString(),
+    avatar_id:      avatar?.id || null,
+    legenda:        caption,
+    hashtags:       hashtags,
+    plataformas:    platforms,
+    status:         status,
+    agendado_para:  schedule ? new Date(schedule).toISOString() : null,
+    imagem_url:     imageUrl,
+    video_url:      videoUrl,
+    tipo_conteudo:  isVideo ? 'video' : 'imagem',
+    criado_em:      new Date().toISOString(),
   };
 
   if (DB.ready()) {

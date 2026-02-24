@@ -1,6 +1,10 @@
 /* ============================================================
    sections/avatares.js
    ============================================================ */
+
+// Estado das imagens de referência no modal de avatar
+let _refImagesState = []; // { url, isNew, dataUrl? }
+
 async function renderAvatares(container) {
   let avatares = [];
 
@@ -41,6 +45,7 @@ function renderAvatarCard(a, isActive) {
   const platforms = (a.plataformas || []).map(p =>
     `<span class="platform-toggle active ${p}" style="cursor:default">${app.platformIcon(p)} ${p}</span>`
   ).join('');
+  const refCount = (a.imagens_referencia || []).length;
 
   return `
     <div class="avatar-card${isActive ? ' active-avatar' : ''}" id="ac-${a.id}">
@@ -60,6 +65,7 @@ function renderAvatarCard(a, isActive) {
       </div>
 
       ${a.prompt_base ? `<div class="text-sm text-muted" style="line-height:1.5;font-style:italic">"${a.prompt_base}"</div>` : ''}
+      ${refCount > 0 ? `<div class="text-sm text-muted" style="display:flex;align-items:center;gap:5px"><i class="fa-regular fa-images" style="color:var(--accent)"></i> ${refCount} imagem(ns) de referência</div>` : ''}
 
       <div class="flex gap-1 mt-1">
         ${!isActive ? `<button class="btn btn-sm btn-secondary flex-1" onclick="setActiveAvatar('${a.id}')"><i class="fa-solid fa-star"></i> Ativar</button>` : '<span class="btn btn-sm btn-secondary flex-1 text-center" style="cursor:default;opacity:.5"><i class="fa-solid fa-star"></i> Ativo</span>'}
@@ -83,6 +89,9 @@ function openAvatarModal(id) {
   const avatares = app.getAvatares();
   const a = id ? avatares.find(x => String(x.id) === String(id)) : null;
   const isNew = !a;
+
+  // Inicializar estado das imagens de referência
+  _refImagesState = (a?.imagens_referencia || []).map(url => ({ url, isNew: false }));
 
   const body = `
     <div class="form-group">
@@ -113,6 +122,11 @@ function openAvatarModal(id) {
     <div class="form-group">
       <label class="form-label">URL da imagem (opcional)</label>
       <input id="av-img" class="form-control" value="${a?.imagem_url || ''}" placeholder="https://…">
+    </div>
+    <div class="form-group mb-0">
+      <label class="form-label">Imagens de referência <span class="text-muted" style="font-weight:400">(até 5 — usadas pela IA para gerar conteúdo)</span></label>
+      <div class="ref-images-grid" id="av-ref-imgs"></div>
+      <div class="form-hint mt-1">Adiciona fotos do avatar, exemplos de estilo ou inspiração visual</div>
     </div>`;
 
   const footer = `
@@ -122,6 +136,41 @@ function openAvatarModal(id) {
     </button>`;
 
   app.openModal(isNew ? 'Novo avatar' : `Editar — ${a.nome}`, body, footer);
+  // Renderizar grid após o modal ser injetado no DOM
+  setTimeout(() => _renderRefImages(), 0);
+}
+
+function _renderRefImages() {
+  const grid = document.getElementById('av-ref-imgs');
+  if (!grid) return;
+  const items = _refImagesState.map((img, i) => `
+    <div class="ref-image-item">
+      <img src="${img.dataUrl || img.url}" alt="ref ${i + 1}">
+      <button class="ref-image-delete" onclick="removeRefImage(${i})" title="Remover"><i class="fa-solid fa-xmark"></i></button>
+    </div>`).join('');
+  const addBtn = _refImagesState.length < 5 ? `
+    <label class="ref-image-add" title="Adicionar imagem">
+      <i class="fa-solid fa-plus"></i>
+      <input type="file" accept="image/*" style="display:none" onchange="addRefImage(this)">
+    </label>` : '';
+  grid.innerHTML = items + addBtn;
+}
+
+function addRefImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (_refImagesState.length >= 5) { app.toast('Máximo 5 imagens de referência', 'warning'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    _refImagesState.push({ dataUrl: e.target.result, isNew: true });
+    _renderRefImages();
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeRefImage(i) {
+  _refImagesState.splice(i, 1);
+  _renderRefImages();
 }
 
 function togglePlatformModal(el) {
@@ -131,11 +180,11 @@ function togglePlatformModal(el) {
 }
 
 async function saveAvatar(id) {
-  const nome     = document.getElementById('av-nome').value.trim();
-  const nicho    = document.getElementById('av-nicho').value.trim();
-  const emoji    = document.getElementById('av-emoji').value.trim();
-  const prompt   = document.getElementById('av-prompt').value.trim();
-  const imgUrl   = document.getElementById('av-img').value.trim();
+  const nome      = document.getElementById('av-nome').value.trim();
+  const nicho     = document.getElementById('av-nicho').value.trim();
+  const emoji     = document.getElementById('av-emoji').value.trim();
+  const prompt    = document.getElementById('av-prompt').value.trim();
+  const imgUrl    = document.getElementById('av-img').value.trim();
   const platforms = [...document.querySelectorAll('#av-platforms .platform-toggle.active')].map(el => el.dataset.p);
 
   if (!nome || !nicho) { app.toast('Nome e nicho são obrigatórios', 'error'); return; }
@@ -144,10 +193,35 @@ async function saveAvatar(id) {
   if (id) avatar.id = id;
 
   if (DB.ready()) {
-    const { error } = await DB.upsertAvatar(avatar);
+    // 1. Guardar avatar para obter o ID (necessário para o path no Storage)
+    const { data: saved, error } = await DB.upsertAvatar(avatar);
     if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+
+    const savedId = saved?.id || id;
+
+    // 2. Upload de novas imagens de referência e colecionar todos os URLs
+    const storagePrefix = savedId || String(Date.now());
+    const refUrls = [];
+    for (const img of _refImagesState) {
+      if (!img.isNew) {
+        refUrls.push(img.url);
+      } else if (img.dataUrl) {
+        const { url, error: uploadErr } = await DB.uploadAvatarReferenceImage(img.dataUrl, storagePrefix);
+        if (uploadErr) {
+          console.warn('Erro ao fazer upload de imagem de referência:', uploadErr);
+        } else {
+          refUrls.push(url);
+        }
+      }
+    }
+
+    // 3. Atualizar avatar com os URLs das imagens de referência
+    if (savedId) {
+      await DB.upsertAvatar({ id: savedId, imagens_referencia: refUrls });
+    }
   } else {
-    // Local
+    // Modo local (sem Supabase)
+    avatar.imagens_referencia = _refImagesState.filter(i => !i.isNew).map(i => i.url);
     const list = app.getAvatares();
     if (id) {
       const idx = list.findIndex(x => String(x.id) === String(id));

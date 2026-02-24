@@ -146,5 +146,43 @@ const DB = (() => {
     return { url: urlData?.publicUrl };
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage };
+  /* Upload de imagem de referência para um avatar */
+  async function uploadAvatarReferenceImage(dataUrl, avatarId) {
+    if (!_client) return { error: 'not connected' };
+    const [meta, b64] = dataUrl.split(',');
+    const mime = meta.match(/:(.*?);/)[1];
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mime });
+    const ext  = mime.split('/')[1]?.split('+')[0] || 'jpg';
+    const path = `${avatarId}/${Date.now()}.${ext}`;
+
+    const { error } = await _client.storage.from('avatar-references').upload(path, blob, { contentType: mime, upsert: false });
+    if (error) return { error };
+
+    const { data: urlData } = _client.storage.from('avatar-references').getPublicUrl(path);
+    return { url: urlData?.publicUrl };
+  }
+
+  /* Upload de vídeo gerado/carregado para um post */
+  async function uploadPostVideo(dataUrl, filename) {
+    if (!_client) return { error: 'not connected' };
+    const [meta, b64] = dataUrl.split(',');
+    const mime = meta.match(/:(.*?);/)[1];
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mime });
+    const ext  = mime.split('/')[1]?.split('+')[0] || 'mp4';
+    const path = `${filename || Date.now()}.${ext}`;
+
+    const { error } = await _client.storage.from('post-videos').upload(path, blob, { contentType: mime, upsert: true });
+    if (error) return { error };
+
+    const { data: urlData } = _client.storage.from('post-videos').getPublicUrl(path);
+    return { url: urlData?.publicUrl };
+  }
+
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo };
 })();
