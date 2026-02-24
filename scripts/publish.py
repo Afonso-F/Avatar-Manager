@@ -9,8 +9,6 @@ Variáveis de ambiente necessárias (GitHub Secrets):
 """
 import os
 import sys
-import json
-import base64
 import logging
 import requests
 from datetime import datetime, timezone
@@ -25,6 +23,7 @@ SUPABASE_KEY  = os.environ['SUPABASE_KEY']
 INSTAGRAM_TOKEN = os.environ.get('INSTAGRAM_TOKEN', '')
 TIKTOK_TOKEN    = os.environ.get('TIKTOK_TOKEN', '')
 FACEBOOK_TOKEN  = os.environ.get('FACEBOOK_TOKEN', '')
+YOUTUBE_TOKEN   = os.environ.get('YOUTUBE_TOKEN', '')
 DRY_RUN         = os.environ.get('DRY_RUN', 'false').lower() == 'true'
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -111,13 +110,61 @@ def publish_instagram(post: dict) -> bool:
 
 
 def publish_tiktok(post: dict) -> bool:
+    """TikTok Content Posting API v2 — Direct Photo Post."""
     if not TIKTOK_TOKEN:
         log.warning("TikTok token não configurado — a saltar")
         return False
-    # TikTok Content Posting API (v2)
-    # Necessita de implementação completa conforme documentação oficial
-    log.info("TikTok: publicação via API ainda não implementada neste script")
-    return False
+
+    img_url  = post.get('imagem_url')
+    if not img_url:
+        log.warning("TikTok: post sem imagem — a saltar")
+        return False
+
+    caption  = post.get('legenda', '')
+    hashtags = post.get('hashtags', '')
+    title    = f"{caption} {hashtags}".strip()[:150]  # TikTok title limit
+
+    headers = {
+        'Authorization': f'Bearer {TIKTOK_TOKEN}',
+        'Content-Type':  'application/json; charset=UTF-8',
+    }
+    payload = {
+        'post_info': {
+            'title':                title,
+            'privacy_level':        'PUBLIC_TO_EVERYONE',
+            'disable_duet':         False,
+            'disable_comment':      False,
+            'disable_stitch':       False,
+            'brand_content_toggle': False,
+            'brand_organic_toggle': False,
+        },
+        'source_info': {
+            'source':             'PULL_FROM_URL',
+            'photo_cover_index':  0,
+            'photo_images':       [img_url],
+            'post_mode':          'DIRECT_POST',
+            'media_type':         'PHOTO',
+        },
+    }
+
+    r = requests.post(
+        'https://open.tiktokapis.com/v2/post/publish/content/init/',
+        headers=headers, json=payload, timeout=30
+    )
+    if not r.ok:
+        log.error(f"TikTok: {r.status_code} {r.text}")
+        return False
+
+    data      = r.json()
+    err_code  = data.get('error', {}).get('code', '')
+    if err_code != 'ok':
+        log.error(f"TikTok API error: {data.get('error')}")
+        return False
+
+    publish_id = data.get('data', {}).get('publish_id')
+    log.info(f"TikTok publicado: {publish_id}")
+    save_published(post, 'tiktok', social_id=publish_id)
+    return True
 
 
 def publish_facebook(post: dict) -> bool:
@@ -149,10 +196,85 @@ def publish_facebook(post: dict) -> bool:
     return True
 
 
+def publish_youtube(post: dict) -> bool:
+    """YouTube Data API v3 — Resumable video upload."""
+    if not YOUTUBE_TOKEN:
+        log.warning("YouTube token não configurado — a saltar")
+        return False
+
+    video_url = post.get('imagem_url')   # usa imagem_url; idealmente seria um video_url
+    if not video_url:
+        log.warning("YouTube: post sem URL de conteúdo — a saltar")
+        return False
+
+    caption     = post.get('legenda', '')
+    hashtags    = post.get('hashtags', '')
+    title       = caption[:100] or 'Novo vídeo'
+    description = f"{caption}\n\n{hashtags}".strip()
+
+    # Descarregar conteúdo
+    try:
+        content_r = requests.get(video_url, timeout=60)
+        content_r.raise_for_status()
+    except Exception as e:
+        log.error(f"YouTube: erro a descarregar conteúdo: {e}")
+        return False
+
+    content_type = content_r.headers.get('Content-Type', 'video/mp4')
+    content_data = content_r.content
+
+    # Step 1: iniciar upload resumível
+    init_headers = {
+        'Authorization':          f'Bearer {YOUTUBE_TOKEN}',
+        'Content-Type':           'application/json; charset=UTF-8',
+        'X-Upload-Content-Type':  content_type,
+        'X-Upload-Content-Length': str(len(content_data)),
+    }
+    metadata = {
+        'snippet': {
+            'title':       title,
+            'description': description,
+            'categoryId':  '22',   # People & Blogs
+        },
+        'status': {'privacyStatus': 'public'},
+    }
+    init_r = requests.post(
+        'https://www.googleapis.com/upload/youtube/v3/videos'
+        '?uploadType=resumable&part=snippet,status',
+        headers=init_headers, json=metadata, timeout=30
+    )
+    if not init_r.ok:
+        log.error(f"YouTube init: {init_r.status_code} {init_r.text}")
+        return False
+
+    upload_url = init_r.headers.get('Location')
+    if not upload_url:
+        log.error("YouTube: sem URL de upload na resposta")
+        return False
+
+    # Step 2: enviar conteúdo
+    upload_r = requests.put(
+        upload_url,
+        data=content_data,
+        headers={'Content-Type': content_type},
+        timeout=120
+    )
+    if upload_r.status_code not in (200, 201):
+        log.error(f"YouTube upload: {upload_r.status_code} {upload_r.text}")
+        return False
+
+    video_id = upload_r.json().get('id')
+    url      = f"https://www.youtube.com/watch?v={video_id}"
+    log.info(f"YouTube publicado: {video_id}")
+    save_published(post, 'youtube', social_id=video_id, url=url)
+    return True
+
+
 PUBLISHERS = {
     'instagram': publish_instagram,
     'tiktok':    publish_tiktok,
     'facebook':  publish_facebook,
+    'youtube':   publish_youtube,
 }
 
 

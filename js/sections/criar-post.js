@@ -318,6 +318,20 @@ async function savePost(forceStatus) {
   if (!caption) { app.toast('Adiciona uma legenda ao post', 'warning'); return; }
   if (!platforms.length) { app.toast('Seleciona pelo menos uma plataforma', 'warning'); return; }
 
+  // Upload imagem para Supabase Storage se existir
+  let imageUrl = null;
+  if (_criarState.imageDataUrl && DB.ready()) {
+    const statusEl = document.getElementById('cp-img-status');
+    if (statusEl) statusEl.textContent = 'A guardar imagem…';
+    const { url, error: uploadErr } = await DB.uploadPostImage(_criarState.imageDataUrl, `post-${Date.now()}`);
+    if (uploadErr) {
+      app.toast('Aviso: imagem não guardada no Storage', 'warning');
+    } else {
+      imageUrl = url;
+    }
+    if (statusEl) statusEl.textContent = '';
+  }
+
   const post = {
     avatar_id:     avatar?.id || null,
     legenda:       caption,
@@ -325,7 +339,7 @@ async function savePost(forceStatus) {
     plataformas:   platforms,
     status:        status,
     agendado_para: schedule ? new Date(schedule).toISOString() : null,
-    imagem_url:    null,
+    imagem_url:    imageUrl,
     criado_em:     new Date().toISOString(),
   };
 
