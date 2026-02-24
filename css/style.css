@@ -120,6 +120,28 @@ body {
 .status-dot.online  { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .status-dot.offline { background: var(--text-muted); }
 
+.version-info { margin-top: 8px; }
+.version-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 0.78rem; font-weight: 600;
+  padding: 2px 0; transition: color var(--transition);
+}
+.version-btn:hover { color: var(--text-secondary); }
+.new-badge {
+  display: inline-flex; align-items: center;
+  background: var(--accent); color: #fff;
+  font-size: 0.65rem; font-weight: 700; padding: 2px 6px;
+  border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em;
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.65; }
+}
+.badge-accent { background: var(--accent-soft); color: var(--accent); border-radius: 20px; padding: 3px 8px; font-size: 0.75rem; font-weight: 700; }
+.sidebar.collapsed .version-info { display: none; }
+
 /* ── Main ── */
 .main {
   margin-left: var(--sidebar-w);
