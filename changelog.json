@@ -1,0 +1,20 @@
+[
+  {
+    "version": "1.0.0",
+    "date": "2026-02-24",
+    "title": "Lançamento inicial",
+    "type": "major",
+    "changes": [
+      "Dashboard com estatísticas em tempo real e calendário de agendamentos",
+      "Gestão de avatares com suporte a múltiplos perfis e roles",
+      "Criação de posts com geração de legendas via Gemini AI",
+      "Fila e agenda de publicações com visualização mensal",
+      "Histórico completo de posts publicados com métricas",
+      "Análises de performance por plataforma (Instagram, TikTok, Facebook, YouTube)",
+      "Integração nativa com Supabase para persistência de dados",
+      "Sistema de notificações toast",
+      "Sidebar recolhível com navegação por secções",
+      "Tema escuro com paleta roxa/rosa"
+    ]
+  }
+]

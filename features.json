@@ -1,0 +1,10 @@
+{
+  "gemini_ai": true,
+  "multi_platform": true,
+  "auto_publish": true,
+  "analytics": true,
+  "avatar_profiles": true,
+  "post_queue": true,
+  "changelog_modal": true,
+  "master_account": true
+}
