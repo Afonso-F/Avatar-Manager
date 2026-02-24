@@ -172,7 +172,7 @@ async function testSupabase() {
       app.toast('Supabase OK!', 'success');
       app.initSupabase();
     } else {
-      el.innerHTML = `<span style="color:var(--yellow)"><i class="fa-solid fa-triangle-exclamation"></i> Ligado mas: ${error}</span>`;
+      el.innerHTML = `<span style="color:var(--yellow)"><i class="fa-solid fa-triangle-exclamation"></i> Ligado mas: ${error?.message || JSON.stringify(error)}</span>`;
     }
   } else {
     el.innerHTML = '<span style="color:var(--red)"><i class="fa-solid fa-circle-xmark"></i> Falhou</span>';
