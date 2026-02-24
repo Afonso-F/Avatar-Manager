@@ -172,9 +172,8 @@ function defaultSchedule() {
 }
 
 function getSelectedAvatarId() {
-  const el = document.querySelector('#cp-platforms')?.closest('.content')?.querySelector('[id^="av-sel-"].active');
-  // fallback
-  return app.getActiveAvatar()?.id;
+  const el = document.querySelector('[id^="av-sel-"].active');
+  return el?.dataset.avid || app.getActiveAvatar()?.id;
 }
 
 function selectAvatar(id) {

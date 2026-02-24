@@ -65,7 +65,7 @@ function renderAvatarCard(a, isActive) {
         ${!isActive ? `<button class="btn btn-sm btn-secondary flex-1" onclick="setActiveAvatar('${a.id}')"><i class="fa-solid fa-star"></i> Ativar</button>` : '<span class="btn btn-sm btn-secondary flex-1 text-center" style="cursor:default;opacity:.5"><i class="fa-solid fa-star"></i> Ativo</span>'}
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openContasModal('${a.id}','${a.nome}')" title="Contas sociais"><i class="fa-solid fa-link"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarModal('${a.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
-        <button class="btn btn-sm btn-danger btn-icon" onclick="confirmDeleteAvatar('${a.id}','${a.nome}')" title="Apagar"><i class="fa-solid fa-trash"></i></button>
+        <button class="btn btn-sm btn-danger btn-icon" onclick="confirmDeleteAvatar('${a.id}', this.dataset.nome)" data-nome="${(a.nome || '').replace(/"/g, '&quot;')}" title="Apagar"><i class="fa-solid fa-trash"></i></button>
       </div>
     </div>`;
 }

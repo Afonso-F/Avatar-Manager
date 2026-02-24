@@ -65,12 +65,15 @@ const DB = (() => {
   /* ── Publicados ── */
   async function getPublicados({ avatar_id, plataforma, search, limit = 20, offset = 0 } = {}) {
     if (!_client) return { data: [], count: 0, error: 'not connected' };
+    // Use !inner when searching so PostgREST applies the filter as an INNER JOIN,
+    // otherwise the ilike on the embedded resource is ignored (LEFT JOIN behaviour).
+    const postsJoin = search ? 'posts!inner(legenda, imagem_url, hashtags)' : 'posts(legenda, imagem_url, hashtags)';
     let q = _client.from('publicados')
-      .select('*, posts(legenda, imagem_url, hashtags), avatares(nome)', { count: 'exact' })
+      .select(`*, ${postsJoin}, avatares(nome)`, { count: 'exact' })
       .order('publicado_em', { ascending: false });
     if (avatar_id)   q = q.eq('avatar_id', avatar_id);
     if (plataforma)  q = q.eq('plataforma', plataforma);
-    if (search)      q = q.ilike('posts.legenda', `%${search}%`);
+    if (search)      q = q.filter('posts.legenda', 'ilike', `%${search}%`);
     q = q.range(offset, offset + limit - 1);
     return q;
   }
@@ -136,7 +139,7 @@ const DB = (() => {
     const ext  = mime.split('/')[1]?.split('+')[0] || 'png';
     const path = `${filename || Date.now()}.${ext}`;
 
-    const { error } = await _client.storage.from('post-images').upload(path, blob, { contentType: mime, upsert: false });
+    const { error } = await _client.storage.from('post-images').upload(path, blob, { contentType: mime, upsert: true });
     if (error) return { error };
 
     const { data: urlData } = _client.storage.from('post-images').getPublicUrl(path);

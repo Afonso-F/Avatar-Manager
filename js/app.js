@@ -17,6 +17,7 @@ const app = (() => {
   let _version = null;
   let _features = {};
   let _changelog = [];
+  let _navId = 0;
 
   /* ── Init ── */
   function init() {
@@ -212,7 +213,8 @@ const app = (() => {
     const renderFn = (typeof window !== 'undefined' ? window : global)[sections[section].fn];
     const content = document.getElementById('content');
     content.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>A carregar…</span></div>';
-    setTimeout(() => renderFn(content), 60);
+    const navId = ++_navId;
+    setTimeout(() => { if (navId === _navId) renderFn(content); }, 60);
   }
 
   /* ── Toast ── */
