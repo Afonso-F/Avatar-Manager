@@ -13,8 +13,14 @@ const Config = (() => {
     ACTIVE_AVATAR:'as_active_avatar',
   };
 
+  // Valores pré-configurados (podem ser sobrescritos nas Configurações)
+  const DEFAULTS = {
+    SUPABASE_URL: 'https://fjbqaminivgcyzjrjqsb.supabase.co',
+    SUPABASE_KEY: 'sb_publishable_ERR4k-d8X5sAohBSlxlptw_rfpTH2fb',
+  };
+
   function get(key) {
-    return localStorage.getItem(KEYS[key]) || '';
+    return localStorage.getItem(KEYS[key]) || DEFAULTS[key] || '';
   }
 
   function set(key, value) {

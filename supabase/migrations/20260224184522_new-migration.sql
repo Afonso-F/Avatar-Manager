@@ -1,6 +1,5 @@
 -- ============================================================
--- AvatarStudio — Supabase Schema
--- Cria as tabelas necessárias no teu projecto Supabase
+-- AvatarStudio — Migração inicial
 -- ============================================================
 
 -- Habilitar UUID
@@ -19,7 +18,6 @@ create table if not exists avatares (
   criado_em     timestamptz default now(),
   atualizado_em timestamptz default now()
 );
-
 
 -- ── Tabela: posts ────────────────────────────────────────────
 create table if not exists posts (
@@ -47,8 +45,8 @@ create table if not exists publicados (
   avatar_id      uuid references avatares(id) on delete set null,
   plataforma     text not null,
   publicado_em   timestamptz default now(),
-  post_id_social text,           -- ID do post na rede social
-  url_post       text,           -- URL do post publicado
+  post_id_social text,
+  url_post       text,
   likes          integer default 0,
   comentarios    integer default 0,
   partilhas      integer default 0,
@@ -57,8 +55,8 @@ create table if not exists publicados (
 );
 
 -- Índices para publicados
-create index if not exists publicados_avatar_id_idx   on publicados(avatar_id);
-create index if not exists publicados_plataforma_idx  on publicados(plataforma);
+create index if not exists publicados_avatar_id_idx    on publicados(avatar_id);
+create index if not exists publicados_plataforma_idx   on publicados(plataforma);
 create index if not exists publicados_publicado_em_idx on publicados(publicado_em desc);
 
 -- ── Tabela: contas ───────────────────────────────────────────
@@ -67,15 +65,15 @@ create table if not exists contas (
   id            uuid primary key default gen_random_uuid(),
   avatar_id     uuid references avatares(id) on delete cascade not null,
   plataforma    text not null check (plataforma in ('instagram','tiktok','facebook','youtube')),
-  username      text,                    -- handle / nome de utilizador na plataforma
-  conta_id      text,                    -- ID da conta/página na plataforma (ex: IG business account ID)
-  access_token  text,                    -- token de acesso OAuth
-  token_expira  timestamptz,             -- data de expiração do token
+  username      text,
+  conta_id      text,
+  access_token  text,
+  token_expira  timestamptz,
   ativo         boolean default true,
   notas         text,
   criado_em     timestamptz default now(),
   atualizado_em timestamptz default now(),
-  unique(avatar_id, plataforma)          -- um avatar tem no máximo uma conta por plataforma
+  unique(avatar_id, plataforma)
 );
 
 -- Índices para contas
@@ -83,12 +81,11 @@ create index if not exists contas_avatar_id_idx  on contas(avatar_id);
 create index if not exists contas_plataforma_idx on contas(plataforma);
 
 -- ── Row Level Security ───────────────────────────────────────
-alter table avatares  enable row level security;
-alter table posts     enable row level security;
+alter table avatares   enable row level security;
+alter table posts      enable row level security;
 alter table publicados enable row level security;
-alter table contas    enable row level security;
+alter table contas     enable row level security;
 
--- Política: permitir tudo para utilizadores autenticados (ajusta conforme necessário)
 create policy "Allow all for authenticated" on avatares
   for all using (true) with check (true);
 

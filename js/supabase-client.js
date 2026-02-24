@@ -75,6 +75,24 @@ const DB = (() => {
     return q;
   }
 
+  /* ── Contas ── */
+  async function getContas(avatar_id) {
+    if (!_client) return { data: [], error: 'not connected' };
+    let q = _client.from('contas').select('*').order('plataforma');
+    if (avatar_id) q = q.eq('avatar_id', avatar_id);
+    return q;
+  }
+
+  async function upsertConta(conta) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('contas').upsert(conta, { onConflict: 'avatar_id,plataforma' }).select().single();
+  }
+
+  async function deleteConta(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('contas').delete().eq('id', id);
+  }
+
   /* ── Analytics ── */
   async function getAnalytics(avatar_id) {
     if (!_client) return { data: [], error: 'not connected' };
@@ -84,5 +102,5 @@ const DB = (() => {
     return q.order('publicado_em', { ascending: false }).limit(200);
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics };
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta };
 })();
