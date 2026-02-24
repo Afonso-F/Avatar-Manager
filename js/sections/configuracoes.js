@@ -100,7 +100,7 @@ function renderConfiguracoes(container) {
         Adiciona as tuas API keys como <strong>Secrets</strong> no repositório GitHub.
       </p>
       <div class="flex gap-1 flex-wrap">
-        ${['GEMINI_API_KEY','SUPABASE_URL','SUPABASE_KEY','INSTAGRAM_TOKEN','TIKTOK_TOKEN','FACEBOOK_TOKEN'].map(k =>
+        ${['GEMINI_API_KEY','SUPABASE_URL','SUPABASE_KEY','INSTAGRAM_TOKEN','TIKTOK_TOKEN','FACEBOOK_TOKEN','YOUTUBE_TOKEN'].map(k =>
           `<code style="background:var(--bg-elevated);padding:4px 8px;border-radius:4px;font-size:.8rem;color:var(--accent)">${k}</code>`
         ).join('')}
       </div>

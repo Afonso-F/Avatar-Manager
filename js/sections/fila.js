@@ -34,9 +34,9 @@ async function renderFila(container) {
     </div>
 
     <div class="tabs" id="fila-tabs">
-      <button class="tab-btn${_filaState.tab === 'agendado'  ? ' active' : ''}" onclick="setFilaTab('agendado')">Agendados</button>
-      <button class="tab-btn${_filaState.tab === 'rascunho'  ? ' active' : ''}" onclick="setFilaTab('rascunho')">Rascunhos</button>
-      <button class="tab-btn${_filaState.tab === 'all'       ? ' active' : ''}" onclick="setFilaTab('all')">Todos</button>
+      <button class="tab-btn${_filaState.tab === 'agendado'  ? ' active' : ''}" onclick="setFilaTab('agendado', this)">Agendados</button>
+      <button class="tab-btn${_filaState.tab === 'rascunho'  ? ' active' : ''}" onclick="setFilaTab('rascunho', this)">Rascunhos</button>
+      <button class="tab-btn${_filaState.tab === 'all'       ? ' active' : ''}" onclick="setFilaTab('all', this)">Todos</button>
     </div>
 
     <div class="filter-bar">
@@ -56,11 +56,11 @@ async function renderFila(container) {
   renderFilaList();
 }
 
-function setFilaTab(tab) {
+function setFilaTab(tab, btn) {
   _filaState.tab  = tab;
   _filaState.page = 0;
   document.querySelectorAll('#fila-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+  if (btn) btn.classList.add('active');
   renderFilaList();
 }
 
