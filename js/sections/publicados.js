@@ -21,7 +21,12 @@ async function renderPublicados(container) {
         <div class="section-title">Publicados</div>
         <div class="section-subtitle">Todos os posts publicados</div>
       </div>
-      <div id="pub-total" class="text-muted text-sm"></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="pub-total" class="text-muted text-sm"></div>
+        <button class="btn btn-secondary btn-sm" onclick="exportPublicadosCsv()">
+          <i class="fa-solid fa-file-csv"></i> Exportar CSV
+        </button>
+      </div>
     </div>
 
     <div class="filter-bar">
@@ -166,6 +171,37 @@ function renderPubPagination(totalPages, current) {
   html += `<button class="page-btn" onclick="setPubPage(${current + 1})" ${current >= totalPages - 1 ? 'disabled' : ''}><i class="fa-solid fa-chevron-right"></i></button>`;
   html += '</div>';
   el.innerHTML = html;
+}
+
+/* ── Exportar CSV ── */
+async function exportPublicadosCsv() {
+  if (!DB.ready()) { app.toast('Supabase necessário para exportar', 'warning'); return; }
+
+  const { search, avatarId, plataforma } = _pubState;
+  const { data, error } = await DB.getPublicados({
+    avatar_id:  avatarId || undefined,
+    plataforma: plataforma || undefined,
+    search:     search || undefined,
+    limit:      1000,
+    offset:     0,
+  });
+
+  if (error || !data?.length) { app.toast('Sem dados para exportar', 'warning'); return; }
+
+  const avatares = _pubState.avatares || [];
+  const header   = 'Data publicação,Avatar,Plataforma,Legenda,Likes,Comentários,Views\n';
+  const rows     = data.map(p => {
+    const av  = avatares.find(a => String(a.id) === String(p.avatar_id));
+    const leg = (p.posts?.legenda || '').replace(/"/g, '""');
+    return `${p.publicado_em || ''},${av?.nome || ''},${p.plataforma},"${leg}",${p.likes || 0},${p.comentarios || 0},${p.visualizacoes || 0}`;
+  }).join('\n');
+
+  const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href  = URL.createObjectURL(blob);
+  link.download = `publicados_${new Date().toISOString().slice(0,10)}.csv`;
+  link.click();
+  app.toast(`${data.length} registos exportados!`, 'success');
 }
 
 let _pubSearchTimer;

@@ -43,10 +43,10 @@ def get_due_posts():
 
 
 def mark_post(post_id: str, status: str, error: str = None):
-    supabase.table('posts').update({
-        'status': status,
-        'atualizado_em': datetime.now(timezone.utc).isoformat(),
-    }).eq('id', post_id).execute()
+    data = {'status': status}
+    if error:
+        data['error_msg'] = str(error)[:500]
+    supabase.table('posts').update(data).eq('id', post_id).execute()
     log.info(f"Post {post_id} → {status}" + (f" ({error})" if error else ""))
 
 
@@ -71,32 +71,57 @@ def publish_instagram(post: dict) -> bool:
         log.warning("Instagram token não configurado — a saltar")
         return False
 
+    GRAPH    = 'https://graph.facebook.com/v19.0'
     caption  = post.get('legenda', '')
     hashtags = post.get('hashtags', '')
     full_cap = f"{caption}\n\n{hashtags}".strip()
     img_url  = post.get('imagem_url')
+    vid_url  = post.get('video_url')
 
-    # Step 1: criar container
-    params = {'caption': full_cap, 'access_token': INSTAGRAM_TOKEN}
-    if img_url:
-        params['image_url'] = img_url
-        params['media_type'] = 'IMAGE'
-    else:
-        # Story sem imagem não é permitido — cria post de texto
-        log.warning("Post Instagram sem imagem — a usar placeholder")
+    # Obter IG Business User ID
+    me_r = requests.get(f'{GRAPH}/me', params={'fields': 'id', 'access_token': INSTAGRAM_TOKEN}, timeout=15)
+    if not me_r.ok:
+        log.error(f"Instagram /me: {me_r.status_code} {me_r.text}")
+        return False
+    ig_user_id = me_r.json().get('id')
+    if not ig_user_id:
+        log.error(f"Instagram: sem user ID na resposta: {me_r.json()}")
         return False
 
-    r = requests.post('https://graph.instagram.com/v19.0/me/media', params=params, timeout=30)
+    # Step 1: criar media container
+    if vid_url:
+        # Reels
+        params = {
+            'media_type':    'REELS',
+            'video_url':     vid_url,
+            'caption':       full_cap,
+            'share_to_feed': 'true',
+            'access_token':  INSTAGRAM_TOKEN,
+        }
+    elif img_url:
+        params = {
+            'image_url':    img_url,
+            'caption':      full_cap,
+            'access_token': INSTAGRAM_TOKEN,
+        }
+    else:
+        log.warning("Post Instagram sem imagem ou vídeo — a saltar")
+        return False
+
+    r = requests.post(f'{GRAPH}/{ig_user_id}/media', data=params, timeout=30)
     if not r.ok:
         log.error(f"Instagram media create: {r.status_code} {r.text}")
         return False
 
-    media_id = r.json().get('id')
+    creation_id = r.json().get('id')
+    if not creation_id:
+        log.error(f"Instagram: sem creation_id na resposta: {r.json()}")
+        return False
 
     # Step 2: publicar
     r2 = requests.post(
-        'https://graph.instagram.com/v19.0/me/media_publish',
-        params={'creation_id': media_id, 'access_token': INSTAGRAM_TOKEN},
+        f'{GRAPH}/{ig_user_id}/media_publish',
+        data={'creation_id': creation_id, 'access_token': INSTAGRAM_TOKEN},
         timeout=30
     )
     if not r2.ok:
@@ -110,54 +135,72 @@ def publish_instagram(post: dict) -> bool:
 
 
 def publish_tiktok(post: dict) -> bool:
-    """TikTok Content Posting API v2 — Direct Photo Post."""
+    """TikTok Content Posting API v2 — suporta vídeo e foto."""
     if not TIKTOK_TOKEN:
         log.warning("TikTok token não configurado — a saltar")
         return False
 
-    img_url  = post.get('imagem_url')
-    if not img_url:
-        log.warning("TikTok: post sem imagem — a saltar")
-        return False
-
     caption  = post.get('legenda', '')
     hashtags = post.get('hashtags', '')
-    title    = f"{caption} {hashtags}".strip()[:150]  # TikTok title limit
+    title    = f"{caption} {hashtags}".strip()[:2200]
+    vid_url  = post.get('video_url')
+    img_url  = post.get('imagem_url')
 
     headers = {
         'Authorization': f'Bearer {TIKTOK_TOKEN}',
         'Content-Type':  'application/json; charset=UTF-8',
     }
-    payload = {
-        'post_info': {
-            'title':                title,
-            'privacy_level':        'PUBLIC_TO_EVERYONE',
-            'disable_duet':         False,
-            'disable_comment':      False,
-            'disable_stitch':       False,
-            'brand_content_toggle': False,
-            'brand_organic_toggle': False,
-        },
-        'source_info': {
-            'source':             'PULL_FROM_URL',
-            'photo_cover_index':  0,
-            'photo_images':       [img_url],
-            'post_mode':          'DIRECT_POST',
-            'media_type':         'PHOTO',
-        },
-    }
 
-    r = requests.post(
-        'https://open.tiktokapis.com/v2/post/publish/content/init/',
-        headers=headers, json=payload, timeout=30
-    )
+    if vid_url:
+        # Vídeo via URL
+        payload = {
+            'post_info': {
+                'title':                    title,
+                'privacy_level':            'PUBLIC_TO_EVERYONE',
+                'disable_duet':             False,
+                'disable_comment':          False,
+                'disable_stitch':           False,
+                'video_cover_timestamp_ms': 1000,
+            },
+            'source_info': {
+                'source':    'PULL_FROM_URL',
+                'video_url': vid_url,
+            },
+        }
+        endpoint = 'https://open.tiktokapis.com/v2/post/publish/video/init/'
+    elif img_url:
+        # Foto
+        payload = {
+            'post_info': {
+                'title':                title,
+                'privacy_level':        'PUBLIC_TO_EVERYONE',
+                'disable_duet':         False,
+                'disable_comment':      False,
+                'disable_stitch':       False,
+                'brand_content_toggle': False,
+                'brand_organic_toggle': False,
+            },
+            'source_info': {
+                'source':            'PULL_FROM_URL',
+                'photo_cover_index': 0,
+                'photo_images':      [img_url],
+                'post_mode':         'DIRECT_POST',
+                'media_type':        'PHOTO',
+            },
+        }
+        endpoint = 'https://open.tiktokapis.com/v2/post/publish/content/init/'
+    else:
+        log.warning("TikTok: post sem imagem ou vídeo — a saltar")
+        return False
+
+    r = requests.post(endpoint, headers=headers, json=payload, timeout=30)
     if not r.ok:
         log.error(f"TikTok: {r.status_code} {r.text}")
         return False
 
-    data      = r.json()
-    err_code  = data.get('error', {}).get('code', '')
-    if err_code != 'ok':
+    data     = r.json()
+    err_code = data.get('error', {}).get('code', '')
+    if err_code not in ('ok', ''):
         log.error(f"TikTok API error: {data.get('error')}")
         return False
 
@@ -202,7 +245,7 @@ def publish_youtube(post: dict) -> bool:
         log.warning("YouTube token não configurado — a saltar")
         return False
 
-    video_url = post.get('imagem_url')   # usa imagem_url; idealmente seria um video_url
+    video_url = post.get('video_url')
     if not video_url:
         log.warning("YouTube: post sem URL de conteúdo — a saltar")
         return False

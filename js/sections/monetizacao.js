@@ -53,9 +53,15 @@ async function renderMonetizacao(container) {
     <!-- Total destaque -->
     <div class="card mb-3" style="background:linear-gradient(135deg,var(--bg-elevated),var(--bg-surface));border:1px solid var(--border-light)">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
-        <div>
-          <div class="text-muted text-sm" style="margin-bottom:4px">Receita total (mês atual)</div>
-          <div style="font-size:2.5rem;font-weight:800;color:var(--green)">€${totalReceita.toFixed(2)}</div>
+        <div style="display:flex;gap:32px;flex-wrap:wrap">
+          <div>
+            <div class="text-muted text-sm" style="margin-bottom:4px">Receita total (mês atual)</div>
+            <div style="font-size:2.5rem;font-weight:800;color:var(--green)">€${totalReceita.toFixed(2)}</div>
+          </div>
+          <div>
+            <div class="text-muted text-sm" style="margin-bottom:4px">Lucro líquido</div>
+            <div id="lucro-liquido-val" style="font-size:2.5rem;font-weight:800;color:var(--accent)">€—</div>
+          </div>
         </div>
         <div style="display:flex;gap:20px;flex-wrap:wrap">
           <div style="text-align:center">
@@ -339,6 +345,17 @@ function renderDespesasList() {
   if (!el) return;
 
   const total = _despesasCache.reduce((s, d) => s + parseFloat(d.valor || 0), 0);
+
+  // Atualizar lucro líquido (receita total vem do elemento já renderizado)
+  const lucroEl = document.getElementById('lucro-liquido-val');
+  if (lucroEl) {
+    const receitaEl = document.querySelector('[style*="font-size:2.5rem"][style*="color:var(--green)"]');
+    const receitaStr = receitaEl?.textContent?.replace('€', '').trim() || '0';
+    const receita = parseFloat(receitaStr) || 0;
+    const lucro = receita - total;
+    lucroEl.textContent = `€${lucro.toFixed(2)}`;
+    lucroEl.style.color = lucro >= 0 ? 'var(--green)' : 'var(--red)';
+  }
 
   if (!_despesasCache.length) {
     el.innerHTML = `<div class="text-muted text-sm text-center" style="padding:20px">
