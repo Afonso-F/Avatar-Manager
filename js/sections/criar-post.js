@@ -179,7 +179,12 @@ async function renderCriarPost(container) {
           <div id="cp-img-panel">
             <div class="card-header" style="padding:0;margin-bottom:12px">
               <div class="card-title">Imagem</div>
-              <button class="btn btn-sm btn-ghost" onclick="generateImage()"><i class="fa-solid fa-rotate"></i> Gerar</button>
+              <div class="flex gap-1">
+                <button class="btn btn-sm btn-ghost" onclick="openLibraryPickerModal('imagem','cp-img-prompt')" title="Abrir biblioteca de prompts">
+                  <i class="fa-solid fa-images"></i>
+                </button>
+                <button class="btn btn-sm btn-ghost" onclick="generateImage()"><i class="fa-solid fa-rotate"></i> Gerar</button>
+              </div>
             </div>
             <div class="image-preview-box" id="cp-img-preview">
               <i class="fa-regular fa-image"></i>
@@ -199,13 +204,23 @@ async function renderCriarPost(container) {
               </label>
             </div>
             <div id="cp-img-status" class="text-sm text-muted mt-1"></div>
+            <div id="cp-save-lib-img" style="display:none;margin-top:8px">
+              <button class="btn btn-secondary btn-sm" onclick="openSaveToLibraryForm('imagem')">
+                <i class="fa-solid fa-bookmark"></i> Guardar na biblioteca
+              </button>
+            </div>
           </div>
 
           <!-- Painel vídeo -->
           <div id="cp-vid-panel" style="display:none">
             <div class="card-header" style="padding:0;margin-bottom:12px">
               <div class="card-title">Vídeo ${hasFalAi ? '<span class="badge-model">fal.ai</span>' : '<span class="badge-model veo">Veo 2</span>'}</div>
-              <button class="btn btn-sm btn-ghost" onclick="generateVidPrompt()"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar prompt</button>
+              <div class="flex gap-1">
+                <button class="btn btn-sm btn-ghost" onclick="openLibraryPickerModal('video','cp-vid-prompt')" title="Abrir biblioteca de prompts">
+                  <i class="fa-solid fa-images"></i>
+                </button>
+                <button class="btn btn-sm btn-ghost" onclick="generateVidPrompt()"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar prompt</button>
+              </div>
             </div>
             <div class="video-preview-box" id="cp-vid-preview">
               <i class="fa-solid fa-film"></i>
@@ -233,6 +248,11 @@ async function renderCriarPost(container) {
               </label>
             </div>
             <div id="cp-vid-status" class="text-sm text-muted mt-1"></div>
+            <div id="cp-save-lib-vid" style="display:none;margin-top:8px">
+              <button class="btn btn-secondary btn-sm" onclick="openSaveToLibraryForm('video')">
+                <i class="fa-solid fa-bookmark"></i> Guardar na biblioteca
+              </button>
+            </div>
           </div>
         </div>
 
@@ -255,6 +275,23 @@ async function renderCriarPost(container) {
     document.getElementById('cp-preview-caption').textContent = e.target.value || 'A legenda aparece aqui…';
     document.getElementById('cp-caption-count').textContent = `${e.target.value.length} caracteres`;
   });
+
+  // Pré-preencher prompt vindo da Biblioteca
+  const _libRaw = localStorage.getItem('as_library_prompt');
+  if (_libRaw) {
+    try {
+      const _libData = JSON.parse(_libRaw);
+      localStorage.removeItem('as_library_prompt');
+      const isVid = _libData.tipo === 'video';
+      if (isVid) {
+        document.getElementById('cp-vid-btn')?.click();
+      }
+      const fieldId = isVid ? 'cp-vid-prompt' : 'cp-img-prompt';
+      const el = document.getElementById(fieldId);
+      if (el) { el.value = _libData.prompt || ''; el.dispatchEvent(new Event('input')); }
+      app.toast(`Prompt "${_libData.titulo || ''}" aplicado`, 'info');
+    } catch (_) {}
+  }
 }
 
 /* ── Templates ── */
@@ -562,6 +599,7 @@ async function generateImage() {
     if (hBtn) hBtn.style.display = '';
     app.toast('Imagem gerada!', 'success');
     status.textContent = '';
+    document.getElementById('cp-save-lib-img')?.style.setProperty('display', '');
   } catch (e) {
     app.toast('Erro na imagem: ' + e.message, 'error');
     status.textContent = 'Erro: ' + e.message;
@@ -627,6 +665,7 @@ async function generateVideoPost() {
     }
     app.toast('Vídeo gerado!', 'success');
     status.textContent = '';
+    document.getElementById('cp-save-lib-vid')?.style.setProperty('display', '');
   } catch (e) {
     app.toast('Erro no vídeo: ' + e.message, 'error');
     status.textContent = 'Erro: ' + e.message;

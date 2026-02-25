@@ -11,6 +11,7 @@ const app = (() => {
     criar:          { title: 'Criar Post',        fn: 'renderCriarPost' },
     fila:           { title: 'Fila / Agenda',     fn: 'renderFila' },
     publicados:     { title: 'Publicados',        fn: 'renderPublicados' },
+    biblioteca:     { title: 'Biblioteca',        fn: 'renderBiblioteca' },
     analises:       { title: 'Análises',          fn: 'renderAnalises' },
     monetizacao:    { title: 'Monetização',       fn: 'renderMonetizacao' },
     despesas:       { title: 'Despesas',          fn: 'renderDespesas' },
