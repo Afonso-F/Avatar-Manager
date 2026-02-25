@@ -1,6 +1,19 @@
 /* ============================================================
-   sections/youtube-channels.js — Gestão de canais YouTube
+   sections/youtube-channels.js — Canais de Vídeo (multi-plataforma)
    ============================================================ */
+
+const VIDEO_PLATAFORMAS = {
+  youtube:     { label: 'YouTube',     color: '#ff0000', icon: 'fa-brands fa-youtube',      badge: 'badge-red',    rpm_label: 'RPM AdSense' },
+  twitch:      { label: 'Twitch',      color: '#9146ff', icon: 'fa-brands fa-twitch',       badge: 'badge-purple', rpm_label: 'Receita por sub' },
+  tiktok:      { label: 'TikTok',      color: '#010101', icon: 'fa-brands fa-tiktok',       badge: 'badge-muted',  rpm_label: 'Creator Fund/1000' },
+  vimeo:       { label: 'Vimeo',       color: '#1ab7ea', icon: 'fa-brands fa-vimeo-v',      badge: 'badge-blue',   rpm_label: 'Receita OTT/mês' },
+  rumble:      { label: 'Rumble',      color: '#85c742', icon: 'fa-solid fa-video',         badge: 'badge-green',  rpm_label: 'RPM estimado' },
+  dailymotion: { label: 'Dailymotion', color: '#0066DC', icon: 'fa-solid fa-play',          badge: 'badge-blue',   rpm_label: 'RPM estimado' },
+};
+
+function getVideoPlataforma(p) {
+  return VIDEO_PLATAFORMAS[p] || VIDEO_PLATAFORMAS.youtube;
+}
 
 async function renderYoutube(container) {
   let canais = [];
@@ -9,11 +22,19 @@ async function renderYoutube(container) {
     canais = data || [];
   }
 
+  const totalReceita = canais.reduce((s,c) => s + (parseFloat(c.receita_mes)||0), 0);
+  const totalViews   = canais.reduce((s,c) => s + (c.total_views||0), 0);
+  const totalSubs    = canais.reduce((s,c) => s + (c.seguidores||0), 0);
+  const totalVids    = canais.reduce((s,c) => s + (c.videos_count||0), 0);
+
+  // Agrupar por plataforma para filtros
+  const plataformasUsadas = [...new Set(canais.map(c => c.plataforma || 'youtube'))];
+
   container.innerHTML = `
     <div class="section-header">
       <div>
-        <div class="section-title">Canais YouTube</div>
-        <div class="section-subtitle">Monitoriza os teus canais e receita AdSense</div>
+        <div class="section-title">Canais de Vídeo</div>
+        <div class="section-subtitle">YouTube, Twitch, TikTok, Vimeo, Rumble, Dailymotion</div>
       </div>
       <button class="btn btn-primary" onclick="openYoutubeModal(null)">
         <i class="fa-solid fa-plus"></i> Novo canal
@@ -22,25 +43,52 @@ async function renderYoutube(container) {
 
     ${canais.length === 0 ? `
       <div class="empty-state" style="padding:60px 20px">
-        <i class="fa-brands fa-youtube" style="font-size:2.5rem;color:var(--red);margin-bottom:12px"></i>
+        <i class="fa-solid fa-video" style="font-size:2.5rem;color:var(--border);margin-bottom:12px"></i>
         <p style="font-size:1.1rem;font-weight:600;margin-bottom:6px">Sem canais adicionados</p>
-        <p class="text-muted" style="margin-bottom:20px">Adiciona o teu canal YouTube para monitorizar views e receita</p>
+        <p class="text-muted" style="margin-bottom:20px">Adiciona o teu canal de vídeo para monitorizar views e receita</p>
         <button class="btn btn-primary" onclick="openYoutubeModal(null)"><i class="fa-solid fa-plus"></i> Adicionar canal</button>
       </div>
     ` : `
       <!-- KPIs gerais -->
       <div class="grid-4 mb-3">
-        ${ytStatCard('fa-users','var(--red-soft)','var(--red)', app.formatNumber(canais.reduce((s,c)=>s+(c.seguidores||0),0)), 'Total Subscritores')}
-        ${ytStatCard('fa-eye','var(--accent-soft)','var(--accent)', app.formatNumber(canais.reduce((s,c)=>s+(c.total_views||0),0)), 'Total Views')}
-        ${ytStatCard('fa-film','var(--yellow-soft)','var(--yellow)', canais.reduce((s,c)=>s+(c.videos_count||0),0), 'Total Vídeos')}
-        ${ytStatCard('fa-euro-sign','var(--green-soft)','var(--green)', '€'+canais.reduce((s,c)=>s+(parseFloat(c.receita_mes)||0),0).toFixed(2), 'Receita Este Mês')}
+        ${ytStatCard('fa-users','var(--red-soft)','var(--red)', app.formatNumber(totalSubs), 'Total Subscritores')}
+        ${ytStatCard('fa-eye','var(--accent-soft)','var(--accent)', app.formatNumber(totalViews), 'Total Views')}
+        ${ytStatCard('fa-film','var(--yellow-soft)','var(--yellow)', totalVids, 'Total Vídeos')}
+        ${ytStatCard('fa-euro-sign','var(--green-soft)','var(--green)', '€'+totalReceita.toFixed(2), 'Receita Este Mês')}
       </div>
+
+      <!-- Filtro por plataforma -->
+      ${plataformasUsadas.length > 1 ? `
+        <div class="flex gap-1 mb-3" style="flex-wrap:wrap">
+          <button class="btn btn-sm btn-secondary" id="vf-all" onclick="filterVideoCanais('all')" style="border-color:var(--accent);color:var(--accent)">
+            Todos (${canais.length})
+          </button>
+          ${plataformasUsadas.map(p => {
+            const info = getVideoPlataforma(p);
+            const count = canais.filter(c => (c.plataforma||'youtube') === p).length;
+            return `<button class="btn btn-sm btn-secondary" id="vf-${p}" onclick="filterVideoCanais('${p}')" style="border-color:${info.color}20;color:${info.color}">
+              <i class="${info.icon}"></i> ${info.label} (${count})
+            </button>`;
+          }).join('')}
+        </div>` : ''}
 
       <div class="grid-auto" id="yt-channel-grid">
         ${canais.map(c => renderYoutubeCard(c)).join('')}
       </div>
     `}
   `;
+}
+
+function filterVideoCanais(plataforma) {
+  const grid = document.getElementById('yt-channel-grid');
+  if (!grid) return;
+  grid.querySelectorAll('[data-plataforma-canal]').forEach(el => {
+    if (plataforma === 'all' || el.dataset.plataformaCanal === plataforma) {
+      el.style.display = '';
+    } else {
+      el.style.display = 'none';
+    }
+  });
 }
 
 function ytStatCard(icon, bgSoft, color, value, label) {
@@ -53,33 +101,38 @@ function ytStatCard(icon, bgSoft, color, value, label) {
 }
 
 function renderYoutubeCard(c) {
+  const plat = c.plataforma || 'youtube';
+  const info = getVideoPlataforma(plat);
+
   return `
-    <div class="content-card" id="ytc-${c.id}">
+    <div class="content-card" id="ytc-${c.id}" data-plataforma-canal="${plat}">
       <div class="content-card-header">
-        <div class="content-card-img" style="background:var(--red-soft)">
+        <div class="content-card-img" style="background:${info.color}20">
           ${c.imagem_url
             ? `<img src="${c.imagem_url}" alt="${c.nome}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-            : `<i class="fa-brands fa-youtube" style="color:var(--red);font-size:1.4rem"></i>`}
+            : `<i class="${info.icon}" style="color:${info.color};font-size:1.4rem"></i>`}
         </div>
         <div>
           <div class="content-card-name">${c.nome}</div>
-          <div class="content-card-sub">${c.nicho || 'YouTube'}</div>
+          <div class="content-card-sub">${c.nicho || info.label}</div>
         </div>
-        <span class="badge badge-red" style="margin-left:auto"><i class="fa-brands fa-youtube"></i> YouTube</span>
+        <span class="badge" style="margin-left:auto;background:${info.color}20;color:${info.color}">
+          <i class="${info.icon}"></i> ${info.label}
+        </span>
       </div>
 
       <div class="metrics-grid">
         <div class="metric-item">
-          <div class="metric-value" style="color:var(--red)">${app.formatNumber(c.seguidores)}</div>
-          <div class="metric-label">Subscritores</div>
+          <div class="metric-value" style="color:${info.color}">${app.formatNumber(c.seguidores)}</div>
+          <div class="metric-label">${plat === 'twitch' ? 'Seguidores' : 'Subscritores'}</div>
         </div>
         <div class="metric-item">
           <div class="metric-value">${app.formatNumber(c.total_views)}</div>
-          <div class="metric-label">Views totais</div>
+          <div class="metric-label">${plat === 'twitch' ? 'Views/mês' : 'Views totais'}</div>
         </div>
         <div class="metric-item">
           <div class="metric-value">${c.videos_count || 0}</div>
-          <div class="metric-label">Vídeos</div>
+          <div class="metric-label">${plat === 'twitch' ? 'Streams' : 'Vídeos'}</div>
         </div>
         <div class="metric-item">
           <div class="metric-value" style="color:var(--green)">€${parseFloat(c.receita_mes||0).toFixed(2)}</div>
@@ -90,8 +143,8 @@ function renderYoutubeCard(c) {
       ${c.canal_id ? `<div class="text-sm text-muted" style="display:flex;align-items:center;gap:5px"><i class="fa-solid fa-link" style="color:var(--accent)"></i> ID: ${c.canal_id}</div>` : ''}
 
       <div class="flex gap-1 mt-1">
-        <button class="btn btn-sm btn-secondary flex-1" onclick="openYoutubeVideosModal('${c.id}','${(c.nome||'').replace(/'/g,"\\'")}')">
-          <i class="fa-solid fa-film"></i> Vídeos
+        <button class="btn btn-sm btn-secondary flex-1" onclick="openYoutubeVideosModal('${c.id}','${(c.nome||'').replace(/'/g,"\\'")}','${plat}')">
+          <i class="fa-solid fa-film"></i> ${plat === 'twitch' ? 'Streams' : 'Vídeos'}
         </button>
         <button class="btn btn-sm btn-secondary flex-1" onclick="openYoutubeStatsModal('${c.id}','${(c.nome||'').replace(/'/g,"\\'")}')">
           <i class="fa-solid fa-chart-line"></i> Stats
@@ -115,8 +168,21 @@ async function openYoutubeModal(id) {
   }
   const c = id ? canais.find(x => String(x.id) === String(id)) : null;
   const isNew = !c;
+  const platAtual = c?.plataforma || 'youtube';
 
   const body = `
+    <div class="form-group">
+      <label class="form-label">Plataforma *</label>
+      <div class="platform-toggles" id="vp-platforms">
+        ${Object.entries(VIDEO_PLATAFORMAS).map(([key, info]) => `
+          <div class="platform-toggle${key === platAtual ? ' active' : ''}" data-vp="${key}"
+               onclick="selectVideoPlataforma(this)"
+               style="${key === platAtual ? `background:${info.color}20;border-color:${info.color};color:${info.color}` : ''}">
+            <i class="${info.icon}"></i> ${info.label}
+          </div>`).join('')}
+      </div>
+      <input type="hidden" id="vp-plataforma" value="${platAtual}">
+    </div>
     <div class="grid-2">
       <div class="form-group">
         <label class="form-label">Nome do canal *</label>
@@ -128,9 +194,9 @@ async function openYoutubeModal(id) {
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">ID do Canal YouTube</label>
-      <input id="yt-canal-id" class="form-control" value="${c?.canal_id||''}" placeholder="UCxxxxxxxxxxxxxxxxxx">
-      <div class="form-hint">Encontra o ID em youtube.com/channel/<strong>ID</strong></div>
+      <label class="form-label">ID / Handle do Canal</label>
+      <input id="yt-canal-id" class="form-control" value="${c?.canal_id||''}" placeholder="Ex: UCxxxxxx ou @meucanal">
+      <div class="form-hint" id="canal-id-hint">YouTube: encontra em youtube.com/channel/<strong>ID</strong></div>
     </div>
     <div class="form-group">
       <label class="form-label">URL da imagem do canal</label>
@@ -138,26 +204,26 @@ async function openYoutubeModal(id) {
     </div>
     <div class="grid-2">
       <div class="form-group">
-        <label class="form-label">Subscritores</label>
+        <label class="form-label" id="subs-label">Subscritores</label>
         <input id="yt-subs" class="form-control" type="number" min="0" value="${c?.seguidores||0}">
       </div>
       <div class="form-group">
-        <label class="form-label">Views totais</label>
+        <label class="form-label" id="views-label">Views totais</label>
         <input id="yt-views" class="form-control" type="number" min="0" value="${c?.total_views||0}">
       </div>
     </div>
     <div class="grid-2">
       <div class="form-group">
-        <label class="form-label">Nº de vídeos</label>
+        <label class="form-label" id="vids-label">Nº de vídeos</label>
         <input id="yt-vids" class="form-control" type="number" min="0" value="${c?.videos_count||0}">
       </div>
       <div class="form-group">
-        <label class="form-label">Receita estimada este mês (€)</label>
+        <label class="form-label">Receita este mês (€)</label>
         <input id="yt-receita" class="form-control" type="number" min="0" step="0.01" value="${c?.receita_mes||0}">
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">RPM AdSense (€ por 1000 views)</label>
+    <div class="form-group" id="rpm-group">
+      <label class="form-label" id="rpm-label">RPM AdSense (€ por 1000 views)</label>
       <input id="yt-rpm" class="form-control" type="number" min="0" step="0.01" value="${c?.adsense_rpm||2.00}">
       <div class="form-hint">Valor médio que recebes por 1000 visualizações</div>
     </div>
@@ -172,24 +238,74 @@ async function openYoutubeModal(id) {
       <i class="fa-solid fa-floppy-disk"></i> ${isNew ? 'Criar' : 'Guardar'}
     </button>`;
 
-  app.openModal(isNew ? 'Novo canal YouTube' : `Editar — ${c.nome}`, body, footer);
+  app.openModal(isNew ? 'Novo canal de vídeo' : `Editar — ${c.nome}`, body, footer);
+  // Atualizar labels com a plataforma atual
+  setTimeout(() => updateVideoPlataformaLabels(platAtual), 50);
+}
+
+function selectVideoPlataforma(el) {
+  const vp = el.dataset.vp;
+  const info = getVideoPlataforma(vp);
+  // Desativar todos
+  document.querySelectorAll('#vp-platforms .platform-toggle').forEach(t => {
+    t.classList.remove('active');
+    t.style.background = '';
+    t.style.borderColor = '';
+    t.style.color = '';
+  });
+  // Ativar selecionado
+  el.classList.add('active');
+  el.style.background = `${info.color}20`;
+  el.style.borderColor = info.color;
+  el.style.color = info.color;
+  // Atualizar hidden input
+  const inp = document.getElementById('vp-plataforma');
+  if (inp) inp.value = vp;
+  updateVideoPlataformaLabels(vp);
+}
+
+function updateVideoPlataformaLabels(plat) {
+  const info = getVideoPlataforma(plat);
+  const hint = document.getElementById('canal-id-hint');
+  if (hint) {
+    const hints = {
+      youtube:     'Encontra em youtube.com/channel/<strong>ID</strong>',
+      twitch:      'O teu username no Twitch',
+      tiktok:      'O teu @username no TikTok',
+      vimeo:       'Ex: vimeo.com/<strong>username</strong>',
+      rumble:      'O teu username no Rumble',
+      dailymotion: 'O teu username no Dailymotion',
+    };
+    hint.innerHTML = hints[plat] || 'Handle ou ID do canal';
+  }
+  const subsLabel = document.getElementById('subs-label');
+  if (subsLabel) subsLabel.textContent = plat === 'twitch' ? 'Seguidores' : 'Subscritores';
+  const viewsLabel = document.getElementById('views-label');
+  if (viewsLabel) viewsLabel.textContent = plat === 'twitch' ? 'Views médias/mês' : 'Views totais';
+  const vidsLabel = document.getElementById('vids-label');
+  if (vidsLabel) vidsLabel.textContent = plat === 'twitch' ? 'Streams realizados' : 'Nº de vídeos';
+  const rpmLabel = document.getElementById('rpm-label');
+  if (rpmLabel) rpmLabel.textContent = info.rpm_label;
+  const rpmGroup = document.getElementById('rpm-group');
+  if (rpmGroup) rpmGroup.style.display = plat === 'vimeo' ? 'none' : '';
 }
 
 async function saveYoutubeChannel(id) {
-  const nome       = document.getElementById('yt-nome')?.value.trim();
-  const nicho      = document.getElementById('yt-nicho')?.value.trim();
-  const canal_id   = document.getElementById('yt-canal-id')?.value.trim();
-  const imagem_url = document.getElementById('yt-img')?.value.trim();
-  const seguidores = parseInt(document.getElementById('yt-subs')?.value)||0;
-  const total_views= parseInt(document.getElementById('yt-views')?.value)||0;
-  const videos_count=parseInt(document.getElementById('yt-vids')?.value)||0;
-  const receita_mes= parseFloat(document.getElementById('yt-receita')?.value)||0;
-  const adsense_rpm= parseFloat(document.getElementById('yt-rpm')?.value)||2;
-  const notas      = document.getElementById('yt-notas')?.value.trim();
+  const plataforma  = document.getElementById('vp-plataforma')?.value || 'youtube';
+  const nome        = document.getElementById('yt-nome')?.value.trim();
+  const nicho       = document.getElementById('yt-nicho')?.value.trim();
+  const canal_id    = document.getElementById('yt-canal-id')?.value.trim();
+  const imagem_url  = document.getElementById('yt-img')?.value.trim();
+  const seguidores  = parseInt(document.getElementById('yt-subs')?.value)||0;
+  const total_views = parseInt(document.getElementById('yt-views')?.value)||0;
+  const videos_count= parseInt(document.getElementById('yt-vids')?.value)||0;
+  const receita_mes = parseFloat(document.getElementById('yt-receita')?.value)||0;
+  const adsense_rpm = parseFloat(document.getElementById('yt-rpm')?.value)||2;
+  const notas       = document.getElementById('yt-notas')?.value.trim();
 
   if (!nome) { app.toast('Nome é obrigatório', 'error'); return; }
 
-  const payload = { nome, nicho, canal_id, imagem_url, seguidores, total_views, videos_count, receita_mes, adsense_rpm, notas };
+  const payload = { plataforma, nome, nicho, canal_id, imagem_url, seguidores, total_views, videos_count, receita_mes, adsense_rpm, notas };
   if (id) payload.id = id;
 
   if (DB.ready()) {
@@ -221,21 +337,24 @@ async function deleteYoutubeConfirmed(id) {
   renderYoutube(document.getElementById('content'));
 }
 
-/* ── Modal Vídeos ── */
-async function openYoutubeVideosModal(channelId, channelNome) {
+/* ── Modal Vídeos / Streams ── */
+async function openYoutubeVideosModal(channelId, channelNome, plat = 'youtube') {
   if (!DB.ready()) { app.toast('Supabase necessário', 'warning'); return; }
   const { data: videos } = await DB.getYoutubeVideos(channelId);
   const vids = videos || [];
+  const info = getVideoPlataforma(plat);
+  const itemLabel = plat === 'twitch' ? 'stream' : 'vídeo';
 
   const body = `
     <div style="margin-bottom:16px">
-      <button class="btn btn-sm btn-primary" onclick="openAddVideoModal('${channelId}','${channelNome.replace(/'/g,"\\'")}')">
-        <i class="fa-solid fa-plus"></i> Adicionar vídeo
+      <button class="btn btn-sm btn-primary" onclick="openAddVideoModal('${channelId}','${channelNome.replace(/'/g,"\\'")}','${plat}')">
+        <i class="fa-solid fa-plus"></i> Adicionar ${itemLabel}
       </button>
     </div>
     ${vids.length === 0 ? `
       <div class="empty-state" style="padding:30px">
-        <i class="fa-solid fa-film"></i><p>Sem vídeos registados</p>
+        <i class="${info.icon}" style="color:${info.color}"></i>
+        <p>Sem ${itemLabel}s registados</p>
       </div>
     ` : `
       <div style="display:flex;flex-direction:column;gap:10px;max-height:420px;overflow-y:auto">
@@ -243,7 +362,7 @@ async function openYoutubeVideosModal(channelId, channelNome) {
           <div style="background:var(--bg-elevated);border-radius:10px;padding:12px;display:flex;gap:12px;align-items:center">
             ${v.thumbnail_url
               ? `<img src="${v.thumbnail_url}" style="width:72px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0">`
-              : `<div style="width:72px;height:48px;background:var(--bg-hover);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-play" style="color:var(--text-muted)"></i></div>`}
+              : `<div style="width:72px;height:48px;background:${info.color}20;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="${info.icon}" style="color:${info.color}"></i></div>`}
             <div style="flex:1;min-width:0">
               <div style="font-weight:600;font-size:.9rem;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.titulo}</div>
               <div style="display:flex;gap:12px;font-size:.8rem;color:var(--text-muted)">
@@ -253,29 +372,31 @@ async function openYoutubeVideosModal(channelId, channelNome) {
                 ${v.publicado_em ? `<span>${app.formatDate(v.publicado_em).split(',')[0]}</span>` : ''}
               </div>
             </div>
-            <button class="btn btn-sm btn-danger btn-icon" onclick="deleteVideoConfirmed('${v.id}','${channelId}','${channelNome.replace(/'/g,"\\'")}')">
+            <button class="btn btn-sm btn-danger btn-icon" onclick="deleteVideoConfirmed('${v.id}','${channelId}','${channelNome.replace(/'/g,"\\'")}','${plat}')">
               <i class="fa-solid fa-trash"></i>
             </button>
           </div>`).join('')}
       </div>
     `}`;
 
-  app.openModal(`Vídeos — ${channelNome}`, body, `<button class="btn btn-secondary" onclick="app.closeModal()">Fechar</button>`);
+  app.openModal(`${plat === 'twitch' ? 'Streams' : 'Vídeos'} — ${channelNome}`, body, `<button class="btn btn-secondary" onclick="app.closeModal()">Fechar</button>`);
 }
 
-async function openAddVideoModal(channelId, channelNome = '') {
+async function openAddVideoModal(channelId, channelNome = '', plat = 'youtube') {
+  const info = getVideoPlataforma(plat);
+  const itemLabel = plat === 'twitch' ? 'Stream' : 'Vídeo';
   const body = `
     <div class="form-group">
       <label class="form-label">Título *</label>
-      <input id="vid-titulo" class="form-control" placeholder="Título do vídeo">
+      <input id="vid-titulo" class="form-control" placeholder="Título do ${itemLabel.toLowerCase()}">
     </div>
     <div class="form-group">
-      <label class="form-label">ID do vídeo (YouTube)</label>
-      <input id="vid-id" class="form-control" placeholder="dQw4w9WgXcQ">
+      <label class="form-label">ID / URL do ${itemLabel}</label>
+      <input id="vid-id" class="form-control" placeholder="${plat === 'youtube' ? 'dQw4w9WgXcQ' : 'URL ou ID'}">
     </div>
     <div class="form-group">
       <label class="form-label">URL da thumbnail</label>
-      <input id="vid-thumb" class="form-control" placeholder="https://img.youtube.com/vi/VIDEO_ID/0.jpg">
+      <input id="vid-thumb" class="form-control" placeholder="https://…">
     </div>
     <div class="grid-2">
       <div class="form-group">
@@ -283,7 +404,7 @@ async function openAddVideoModal(channelId, channelNome = '') {
         <input id="vid-views" class="form-control" type="number" min="0" value="0">
       </div>
       <div class="form-group">
-        <label class="form-label">Likes</label>
+        <label class="form-label">${plat === 'twitch' ? 'Peak viewers' : 'Likes'}</label>
         <input id="vid-likes" class="form-control" type="number" min="0" value="0">
       </div>
     </div>
@@ -302,14 +423,14 @@ async function openAddVideoModal(channelId, channelNome = '') {
       <input id="vid-date" class="form-control" type="date">
     </div>`;
 
-  app.openModal('Adicionar vídeo', body, `
-    <button class="btn btn-secondary" onclick="openYoutubeVideosModal('${channelId}','${channelNome.replace(/'/g,"\\'")}')">Voltar</button>
-    <button class="btn btn-primary" onclick="saveYoutubeVideo('${channelId}')">
+  app.openModal(`Adicionar ${itemLabel}`, body, `
+    <button class="btn btn-secondary" onclick="openYoutubeVideosModal('${channelId}','${channelNome.replace(/'/g,"\\'")}','${plat}')">Voltar</button>
+    <button class="btn btn-primary" onclick="saveYoutubeVideo('${channelId}','${plat}')">
       <i class="fa-solid fa-floppy-disk"></i> Guardar
     </button>`);
 }
 
-async function saveYoutubeVideo(channelId) {
+async function saveYoutubeVideo(channelId, plat = 'youtube') {
   const titulo   = document.getElementById('vid-titulo')?.value.trim();
   const video_id = document.getElementById('vid-id')?.value.trim();
   const thumb    = document.getElementById('vid-thumb')?.value.trim();
@@ -332,18 +453,18 @@ async function saveYoutubeVideo(channelId) {
     if (error) { app.toast('Erro ao guardar vídeo', 'error'); return; }
   }
 
-  app.toast('Vídeo adicionado!', 'success');
+  app.toast('Adicionado!', 'success');
   app.closeModal();
   renderYoutube(document.getElementById('content'));
 }
 
-async function deleteVideoConfirmed(videoId, channelId, channelNome) {
+async function deleteVideoConfirmed(videoId, channelId, channelNome, plat = 'youtube') {
   if (DB.ready()) {
     const { error } = await DB.deleteYoutubeVideo(videoId);
     if (error) { app.toast('Erro ao apagar', 'error'); return; }
   }
-  app.toast('Vídeo apagado', 'success');
-  openYoutubeVideosModal(channelId, channelNome);
+  app.toast('Apagado', 'success');
+  openYoutubeVideosModal(channelId, channelNome, plat);
 }
 
 /* ── Modal Stats do Canal ── */
@@ -370,15 +491,15 @@ async function openYoutubeStatsModal(channelId, channelNome) {
         <div class="stat-label">Receita total</div>
       </div>
     </div>
-    <div style="font-weight:700;margin-bottom:10px">Top vídeos por views</div>
+    <div style="font-weight:700;margin-bottom:10px">Top por views</div>
     ${topVids.length ? topVids.map((v,i) => `
       <div class="metric-row">
         <span class="metric-label"><span style="color:var(--accent);font-weight:800">#${i+1}</span> ${v.titulo}</span>
         <span class="metric-value">${app.formatNumber(v.views)} <i class="fa-solid fa-eye" style="font-size:.7rem"></i></span>
-      </div>`).join('') : '<div class="text-muted text-sm" style="padding:16px 0">Sem vídeos registados</div>'}
-    <div style="font-weight:700;margin:16px 0 10px">Total de likes</div>
+      </div>`).join('') : '<div class="text-muted text-sm" style="padding:16px 0">Sem vídeos/streams registados</div>'}
+    <div style="font-weight:700;margin:16px 0 10px">Total de likes / interactions</div>
     <div class="metric-row">
-      <span class="metric-label">Total likes nos vídeos</span>
+      <span class="metric-label">Total likes</span>
       <span class="metric-value" style="color:var(--red)">${app.formatNumber(totalLikes)} <i class="fa-solid fa-thumbs-up" style="font-size:.7rem"></i></span>
     </div>`;
 
