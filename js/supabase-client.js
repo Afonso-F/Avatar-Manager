@@ -37,6 +37,11 @@ const DB = (() => {
     return _client.from('avatares').delete().eq('id', id);
   }
 
+  async function updateAvatarRefImages(id, urls) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('avatares').update({ imagens_referencia: urls }).eq('id', id);
+  }
+
   /* ── Posts ── */
   async function getPosts({ status, avatar_id, limit = 50, offset = 0 } = {}) {
     if (!_client) return { data: [], error: 'not connected' };
@@ -262,5 +267,5 @@ const DB = (() => {
     return { url: urlData?.publicUrl };
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats };
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats };
 })();

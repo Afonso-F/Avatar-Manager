@@ -45,14 +45,19 @@ function renderAvatarCard(a, isActive) {
   const platforms = (a.plataformas || []).map(p =>
     `<span class="platform-toggle active ${p}" style="cursor:default">${app.platformIcon(p)} ${p}</span>`
   ).join('');
-  const refCount = (a.imagens_referencia || []).length;
+  const refs     = a.imagens_referencia || [];
+  const refCount = refs.length;
+  // Usa a primeira imagem de referência como avatar; fallback para imagem_url, depois emoji
+  const avatarSrc = refs[0] || a.imagem_url || null;
 
   return `
     <div class="avatar-card${isActive ? ' active-avatar' : ''}" id="ac-${a.id}">
       ${isActive ? '<div class="avatar-active-badge" title="Avatar ativo"></div>' : ''}
       <div class="flex items-center gap-2">
         <div class="avatar-img">
-          ${a.imagem_url ? `<img src="${a.imagem_url}" alt="${a.nome}">` : `<span>${a.emoji || '🎭'}</span>`}
+          ${avatarSrc
+            ? `<img src="${avatarSrc}" alt="${a.nome}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+            : `<span>${a.emoji || '🎭'}</span>`}
         </div>
         <div>
           <div class="avatar-name">${a.nome}</div>
@@ -69,7 +74,7 @@ function renderAvatarCard(a, isActive) {
 
       <div class="flex gap-1 mt-1">
         ${!isActive ? `<button class="btn btn-sm btn-secondary flex-1" onclick="setActiveAvatar('${a.id}')"><i class="fa-solid fa-star"></i> Ativar</button>` : '<span class="btn btn-sm btn-secondary flex-1 text-center" style="cursor:default;opacity:.5"><i class="fa-solid fa-star"></i> Ativo</span>'}
-        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarFanslyModal('${a.id}','${(a.nome||'').replace(/'/g,"\\'")}','${(a.emoji||'🎭')}')" title="Fansly"><i class="fa-solid fa-dollar-sign" style="color:var(--pink)"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarFanslyModal('${a.id}')" title="Fansly"><i class="fa-solid fa-dollar-sign" style="color:var(--pink)"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openContasModal('${a.id}','${a.nome}')" title="Contas sociais"><i class="fa-solid fa-link"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarModal('${a.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-sm btn-danger btn-icon" onclick="confirmDeleteAvatar('${a.id}', this.dataset.nome)" data-nome="${(a.nome || '').replace(/"/g, '&quot;')}" title="Apagar"><i class="fa-solid fa-trash"></i></button>
@@ -216,9 +221,10 @@ async function saveAvatar(id) {
       }
     }
 
-    // 3. Atualizar avatar com os URLs das imagens de referência
+    // 3. Atualizar avatar com os URLs das imagens de referência (update para não sobrescrever outros campos)
     if (savedId) {
-      await DB.upsertAvatar({ id: savedId, imagens_referencia: refUrls });
+      const { error: refErr } = await DB.updateAvatarRefImages(savedId, refUrls);
+      if (refErr) console.warn('Erro ao guardar imagens de referência:', refErr);
     }
   } else {
     // Modo local (sem Supabase)
@@ -262,9 +268,15 @@ async function deleteAvatarConfirmed(id) {
 }
 
 /* ── Fansly Stats por Avatar ── */
-async function openAvatarFanslyModal(avatarId, avatarNome, avatarEmoji) {
+async function openAvatarFanslyModal(avatarId) {
+  // Lookup avatar from cached list
+  const a = app.getAvatares().find(x => String(x.id) === String(avatarId));
+  const avatarNome = a?.nome || '';
+  const refs       = a?.imagens_referencia || [];
+  const avatarSrc  = refs[0] || a?.imagem_url || null;
+
   let statsHistorico = [];
-  const hoje    = new Date();
+  const hoje     = new Date();
   const mesAtual = hoje.toISOString().slice(0,7) + '-01';
 
   if (DB.ready()) {
@@ -276,7 +288,11 @@ async function openAvatarFanslyModal(avatarId, avatarNome, avatarEmoji) {
 
   const body = `
     <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(124,58,237,0.1));border:1px solid rgba(236,72,153,0.3);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
-      <span style="font-size:2rem">${avatarEmoji}</span>
+      <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center">
+        ${avatarSrc
+          ? `<img src="${avatarSrc}" style="width:100%;height:100%;object-fit:cover">`
+          : `<span style="font-size:1.8rem">${a?.emoji || '🎭'}</span>`}
+      </div>
       <div>
         <div style="font-weight:700;font-size:1.05rem">${avatarNome}</div>
         <div style="font-size:.8rem;color:var(--pink)"><i class="fa-solid fa-dollar-sign"></i> Fansly</div>
