@@ -587,3 +587,53 @@ select.form-control { appearance: none; cursor: pointer; }
 
 /* ── Badge variants ── */
 .badge-red { background: var(--red-soft); color: var(--red); }
+
+/* ── Platform icon colours (extended) ── */
+.icon-fansly   { color: #1db9c3; }
+.icon-onlyfans { color: #00aff0; }
+.icon-patreon  { color: #ff424d; }
+.icon-twitch   { color: #9146ff; }
+.icon-spotify  { color: #1db954; }
+
+/* ── Category / tag chips ── */
+.category-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 4px;
+}
+.category-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 0.75rem; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated); color: var(--text-secondary);
+  transition: all 0.15s ease; user-select: none;
+}
+.category-chip:hover { border-color: var(--accent); color: var(--accent); }
+.category-chip.active {
+  background: var(--accent-soft); border-color: var(--accent);
+  color: var(--accent);
+}
+.category-chip.nsfw.active {
+  background: rgba(239,68,68,0.15); border-color: var(--red); color: var(--red);
+}
+.category-chip.sfw.active {
+  background: var(--green-soft); border-color: var(--green); color: var(--green);
+}
+
+/* ── Avatar card v2 (profile_url + categorias) ── */
+.avatar-profile-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.75rem; color: var(--text-muted);
+  text-decoration: none; transition: color 0.15s;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 100%;
+}
+.avatar-profile-link:hover { color: var(--accent); }
+.avatar-cat-row {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+}
+.avatar-cat-tag {
+  font-size: 0.68rem; padding: 2px 7px; border-radius: 20px; font-weight: 600;
+  background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border);
+}
+.avatar-cat-tag.nsfw { background: rgba(239,68,68,0.12); color: var(--red); border-color: rgba(239,68,68,0.25); }
+.avatar-cat-tag.sfw  { background: var(--green-soft); color: var(--green); border-color: rgba(16,185,129,0.25); }

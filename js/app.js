@@ -266,8 +266,27 @@ const app = (() => {
   }
 
   function platformIcon(p) {
-    const map = { instagram: 'fa-brands fa-instagram icon-instagram', tiktok: 'fa-brands fa-tiktok icon-tiktok', facebook: 'fa-brands fa-facebook icon-facebook', youtube: 'fa-brands fa-youtube icon-youtube' };
+    const map = {
+      instagram: 'fa-brands fa-instagram icon-instagram',
+      tiktok:    'fa-brands fa-tiktok icon-tiktok',
+      facebook:  'fa-brands fa-facebook icon-facebook',
+      youtube:   'fa-brands fa-youtube icon-youtube',
+      fansly:    'fa-solid fa-dollar-sign icon-fansly',
+      onlyfans:  'fa-solid fa-fire icon-onlyfans',
+      patreon:   'fa-brands fa-patreon icon-patreon',
+      twitch:    'fa-brands fa-twitch icon-twitch',
+      spotify:   'fa-brands fa-spotify icon-spotify',
+    };
     return `<i class="${map[p] || 'fa-solid fa-globe'}"></i>`;
+  }
+
+  function platformLabel(p) {
+    const labels = {
+      instagram: 'Instagram', tiktok: 'TikTok', facebook: 'Facebook',
+      youtube: 'YouTube', fansly: 'Fansly', onlyfans: 'OnlyFans',
+      patreon: 'Patreon', twitch: 'Twitch', spotify: 'Spotify',
+    };
+    return labels[p] || p.charAt(0).toUpperCase() + p.slice(1);
   }
 
   function statusBadge(status) {
@@ -290,7 +309,7 @@ const app = (() => {
   }
 
   /* ── Public API ── */
-  return { init, navigate, toast, openModal, closeModal, formatDate, formatNumber, platformIcon, statusBadge, setAvatares, getAvatares, getActiveAvatar, initSupabase, getFeature, openChangelogModal, authLogin, authLogout };
+  return { init, navigate, toast, openModal, closeModal, formatDate, formatNumber, platformIcon, platformLabel, statusBadge, setAvatares, getAvatares, getActiveAvatar, initSupabase, getFeature, openChangelogModal, authLogin, authLogout };
 })();
 
 document.addEventListener('DOMContentLoaded', () => app.init());
