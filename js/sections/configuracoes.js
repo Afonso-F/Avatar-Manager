@@ -81,12 +81,28 @@ function renderConfiguracoes(container) {
             <button class="key-toggle" onclick="toggleKeyVisibility('cfg-facebook', this)"><i class="fa-solid fa-eye"></i></button>
           </div>
         </div>
-        <div class="form-group mb-0">
+        <div class="form-group">
           <label class="form-label"><i class="fa-brands fa-youtube icon-youtube"></i> YouTube API Key</label>
           <div class="key-field">
             <input id="cfg-youtube" class="form-control" type="password" value="${cfg.YOUTUBE}" placeholder="AIza…">
             <button class="key-toggle" onclick="toggleKeyVisibility('cfg-youtube', this)"><i class="fa-solid fa-eye"></i></button>
           </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label"><i class="fa-solid fa-dollar-sign" style="color:var(--pink)"></i> Fansly API Token</label>
+          <div class="key-field">
+            <input id="cfg-fansly" class="form-control" type="password" value="${cfg.FANSLY}" placeholder="Token Fansly…">
+            <button class="key-toggle" onclick="toggleKeyVisibility('cfg-fansly', this)"><i class="fa-solid fa-eye"></i></button>
+          </div>
+          <div class="form-hint">Para uso futuro — tracking manual disponível agora</div>
+        </div>
+        <div class="form-group mb-0">
+          <label class="form-label"><i class="fa-brands fa-spotify" style="color:#1db954"></i> Spotify Client Token</label>
+          <div class="key-field">
+            <input id="cfg-spotify" class="form-control" type="password" value="${cfg.SPOTIFY}" placeholder="Token Spotify…">
+            <button class="key-toggle" onclick="toggleKeyVisibility('cfg-spotify', this)"><i class="fa-solid fa-eye"></i></button>
+          </div>
+          <div class="form-hint">Spotify Web API — para sincronização automática de streams</div>
         </div>
       </div>
     </div>
@@ -132,6 +148,8 @@ function saveAllConfigs() {
     TIKTOK:       'cfg-tiktok',
     FACEBOOK:     'cfg-facebook',
     YOUTUBE:      'cfg-youtube',
+    FANSLY:       'cfg-fansly',
+    SPOTIFY:      'cfg-spotify',
   };
   for (const [key, elId] of Object.entries(map)) {
     const el = document.getElementById(elId);

@@ -4,13 +4,16 @@
 const app = (() => {
   // fn strings resolved at navigate-time so load order doesn't matter
   const sections = {
-    dashboard:      { title: 'Dashboard',      fn: 'renderDashboard' },
-    avatares:       { title: 'Avatares',        fn: 'renderAvatares' },
-    criar:          { title: 'Criar Post',      fn: 'renderCriarPost' },
-    fila:           { title: 'Fila / Agenda',   fn: 'renderFila' },
-    publicados:     { title: 'Publicados',      fn: 'renderPublicados' },
-    analises:       { title: 'Análises',        fn: 'renderAnalises' },
-    configuracoes:  { title: 'Configurações',   fn: 'renderConfiguracoes' },
+    dashboard:      { title: 'Dashboard',        fn: 'renderDashboard' },
+    avatares:       { title: 'Avatares',          fn: 'renderAvatares' },
+    youtube:        { title: 'Canais YouTube',    fn: 'renderYoutube' },
+    musicos:        { title: 'Músicos & Bandas',  fn: 'renderMusicos' },
+    criar:          { title: 'Criar Post',        fn: 'renderCriarPost' },
+    fila:           { title: 'Fila / Agenda',     fn: 'renderFila' },
+    publicados:     { title: 'Publicados',        fn: 'renderPublicados' },
+    analises:       { title: 'Análises',          fn: 'renderAnalises' },
+    monetizacao:    { title: 'Monetização',       fn: 'renderMonetizacao' },
+    configuracoes:  { title: 'Configurações',     fn: 'renderConfiguracoes' },
   };
 
   let current = 'dashboard';

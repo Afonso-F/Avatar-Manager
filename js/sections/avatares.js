@@ -69,6 +69,7 @@ function renderAvatarCard(a, isActive) {
 
       <div class="flex gap-1 mt-1">
         ${!isActive ? `<button class="btn btn-sm btn-secondary flex-1" onclick="setActiveAvatar('${a.id}')"><i class="fa-solid fa-star"></i> Ativar</button>` : '<span class="btn btn-sm btn-secondary flex-1 text-center" style="cursor:default;opacity:.5"><i class="fa-solid fa-star"></i> Ativo</span>'}
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarFanslyModal('${a.id}','${(a.nome||'').replace(/'/g,"\\'")}','${(a.emoji||'🎭')}')" title="Fansly"><i class="fa-solid fa-dollar-sign" style="color:var(--pink)"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openContasModal('${a.id}','${a.nome}')" title="Contas sociais"><i class="fa-solid fa-link"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarModal('${a.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-sm btn-danger btn-icon" onclick="confirmDeleteAvatar('${a.id}', this.dataset.nome)" data-nome="${(a.nome || '').replace(/"/g, '&quot;')}" title="Apagar"><i class="fa-solid fa-trash"></i></button>
@@ -258,6 +259,107 @@ async function deleteAvatarConfirmed(id) {
   app.toast('Avatar apagado', 'success');
   app.closeModal();
   renderAvatares(document.getElementById('content'));
+}
+
+/* ── Fansly Stats por Avatar ── */
+async function openAvatarFanslyModal(avatarId, avatarNome, avatarEmoji) {
+  let statsHistorico = [];
+  const hoje    = new Date();
+  const mesAtual = hoje.toISOString().slice(0,7) + '-01';
+
+  if (DB.ready()) {
+    const { data } = await DB.getFanslyStats(avatarId);
+    statsHistorico = data || [];
+  }
+
+  const statMesAtual = statsHistorico.find(s => s.mes === mesAtual);
+
+  const body = `
+    <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(124,58,237,0.1));border:1px solid rgba(236,72,153,0.3);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+      <span style="font-size:2rem">${avatarEmoji}</span>
+      <div>
+        <div style="font-weight:700;font-size:1.05rem">${avatarNome}</div>
+        <div style="font-size:.8rem;color:var(--pink)"><i class="fa-solid fa-dollar-sign"></i> Fansly</div>
+      </div>
+    </div>
+
+    <div style="font-weight:700;margin-bottom:12px">Mês atual — ${hoje.toLocaleDateString('pt-PT',{month:'long',year:'numeric'})}</div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Subscritores</label>
+        <input id="avfl-subs" class="form-control" type="number" min="0" value="${statMesAtual?.subscribers||0}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Novos subscritores</label>
+        <input id="avfl-novos" class="form-control" type="number" min="0" value="${statMesAtual?.novos_subs||0}">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Receita subscrições (€)</label>
+        <input id="avfl-receita" class="form-control" type="number" min="0" step="0.01" value="${statMesAtual?.receita||0}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tips (€)</label>
+        <input id="avfl-tips" class="form-control" type="number" min="0" step="0.01" value="${statMesAtual?.tips||0}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Views de conteúdo</label>
+      <input id="avfl-views" class="form-control" type="number" min="0" value="${statMesAtual?.views||0}">
+    </div>
+    <div class="form-group mb-0">
+      <label class="form-label">Notas</label>
+      <textarea id="avfl-notas" class="form-control" rows="2" placeholder="Observações…">${statMesAtual?.notas||''}</textarea>
+    </div>
+
+    ${statsHistorico.length > 0 ? `
+      <div style="margin-top:20px">
+        <div style="font-weight:700;margin-bottom:10px">Histórico Fansly</div>
+        <div style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto">
+          ${statsHistorico.map(s => {
+            const d = new Date(s.mes);
+            const recTotal = (parseFloat(s.receita)||0) + (parseFloat(s.tips)||0);
+            return `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg-elevated);border-radius:8px">
+                <span style="font-size:.85rem">${d.toLocaleDateString('pt-PT',{month:'long',year:'numeric'})}</span>
+                <div style="display:flex;gap:16px;font-size:.82rem">
+                  <span style="color:var(--text-muted)"><i class="fa-solid fa-users"></i> ${(s.subscribers||0).toLocaleString()}</span>
+                  <span style="color:var(--pink);font-weight:700">€${recTotal.toFixed(2)}</span>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>
+    ` : ''}`;
+
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveAvatarFanslyStats('${avatarId}','${mesAtual}','${statMesAtual?.id||''}')">
+      <i class="fa-solid fa-floppy-disk"></i> Guardar
+    </button>`;
+
+  app.openModal(`Fansly — ${avatarNome}`, body, footer);
+}
+
+async function saveAvatarFanslyStats(avatarId, mes, existingId) {
+  const subscribers = parseInt(document.getElementById('avfl-subs')?.value)||0;
+  const novos_subs  = parseInt(document.getElementById('avfl-novos')?.value)||0;
+  const receita     = parseFloat(document.getElementById('avfl-receita')?.value)||0;
+  const tips        = parseFloat(document.getElementById('avfl-tips')?.value)||0;
+  const views       = parseInt(document.getElementById('avfl-views')?.value)||0;
+  const notas       = document.getElementById('avfl-notas')?.value.trim();
+
+  const payload = { avatar_id: avatarId, mes, subscribers, novos_subs, receita, tips, views, notas };
+  if (existingId) payload.id = existingId;
+
+  if (DB.ready()) {
+    const { error } = await DB.upsertFanslyStats(payload);
+    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+  }
+
+  app.toast('Stats Fansly guardadas!', 'success');
+  app.closeModal();
 }
 
 /* ── Contas de redes sociais ── */
