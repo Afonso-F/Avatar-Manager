@@ -37,6 +37,11 @@ const DB = (() => {
     return _client.from('avatares').delete().eq('id', id);
   }
 
+  async function updateAvatarRefImages(id, urls) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('avatares').update({ imagens_referencia: urls }).eq('id', id);
+  }
+
   /* ── Posts ── */
   async function getPosts({ status, avatar_id, limit = 50, offset = 0 } = {}) {
     if (!_client) return { data: [], error: 'not connected' };
@@ -262,5 +267,55 @@ const DB = (() => {
     return { url: urlData?.publicUrl };
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats };
+  /* ── Despesas ── */
+  async function getDespesas() {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('despesas').select('*').order('data', { ascending: false });
+  }
+
+  async function upsertDespesa(despesa) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('despesas').upsert(despesa).select().single();
+  }
+
+  async function deleteDespesa(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('despesas').delete().eq('id', id);
+  }
+
+  /* ── Post Templates ── */
+  async function getPostTemplates() {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('post_templates').select('*').order('nome');
+  }
+
+  async function upsertPostTemplate(tpl) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('post_templates').upsert(tpl).select().single();
+  }
+
+  async function deletePostTemplate(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('post_templates').delete().eq('id', id);
+  }
+
+  /* Upload de URL de vídeo externo (fal.ai) directamente como URL */
+  async function uploadPostVideoFromUrl(videoUrl, filename) {
+    if (!_client) return { error: 'not connected' };
+    try {
+      const res  = await fetch(videoUrl);
+      const blob = await res.blob();
+      const mime = blob.type || 'video/mp4';
+      const ext  = mime.split('/')[1] || 'mp4';
+      const path = `${filename || Date.now()}.${ext}`;
+      const { error } = await _client.storage.from('post-videos').upload(path, blob, { contentType: mime, upsert: true });
+      if (error) return { error };
+      const { data: urlData } = _client.storage.from('post-videos').getPublicUrl(path);
+      return { url: urlData?.publicUrl };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getPostTemplates, upsertPostTemplate, deletePostTemplate };
 })();

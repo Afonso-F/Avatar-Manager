@@ -13,6 +13,8 @@ const Config = (() => {
     ACTIVE_AVATAR: 'as_active_avatar',
     FANSLY:        'as_fansly_token',
     SPOTIFY:       'as_spotify_token',
+    FAL_AI:        'as_fal_ai_key',
+    VIDEO_MODEL:   'as_video_model',
   };
 
   // Valores pré-configurados (podem ser sobrescritos nas Configurações)

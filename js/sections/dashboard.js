@@ -101,16 +101,24 @@ async function renderDashboard(container) {
         </div>
         ${avatares.length ? `
           <div style="display:flex;flex-direction:column;gap:8px">
-            ${avatares.slice(0,4).map(a => `
+            ${avatares.slice(0,4).map(a => {
+              const refs = a.imagens_referencia || [];
+              const avatarSrc = refs[0] || a.imagem_url || null;
+              return `
               <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
                 <div style="display:flex;align-items:center;gap:8px">
-                  <span>${a.emoji||'🎭'}</span>
+                  <div style="width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center">
+                    ${avatarSrc
+                      ? `<img src="${avatarSrc}" style="width:100%;height:100%;object-fit:cover">`
+                      : `<span style="font-size:.9rem">${a.emoji||'🎭'}</span>`}
+                  </div>
                   <span style="font-size:.85rem;font-weight:600">${a.nome}</span>
                 </div>
-                <button class="btn btn-sm btn-secondary" style="font-size:.7rem;padding:2px 8px" onclick="openAvatarFanslyModal('${a.id}','${(a.nome||'').replace(/'/g,"\\'")}','${(a.emoji||'🎭')}')">
+                <button class="btn btn-sm btn-secondary" style="font-size:.7rem;padding:2px 8px" onclick="openAvatarFanslyModal('${a.id}')">
                   <i class="fa-solid fa-dollar-sign"></i> Fansly
                 </button>
-              </div>`).join('')}
+              </div>`;
+            }).join('')}
           </div>
         ` : `<div class="empty-state" style="padding:20px"><p>Sem avatares. <a style="color:var(--accent);cursor:pointer" onclick="app.navigate('avatares')">Criar</a></p></div>`}
       </div>
