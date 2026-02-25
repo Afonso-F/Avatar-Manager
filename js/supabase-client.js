@@ -283,6 +283,47 @@ const DB = (() => {
     return _client.from('despesas').delete().eq('id', id);
   }
 
+  /* ── Prompt Library ── */
+  async function getPromptLibrary({ tipo, categoria, search } = {}) {
+    if (!_client) return { data: [], error: 'not connected' };
+    let q = _client.from('prompt_library').select('*, avatares(nome)').order('criado_em', { ascending: false });
+    if (tipo)      q = q.eq('tipo', tipo);
+    if (categoria) q = q.eq('categoria', categoria);
+    if (search)    q = q.or(`titulo.ilike.%${search}%,prompt.ilike.%${search}%`);
+    return q;
+  }
+
+  async function upsertPromptEntry(entry) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('prompt_library').upsert(entry).select().single();
+  }
+
+  async function deletePromptEntry(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('prompt_library').delete().eq('id', id);
+  }
+
+  async function incrementPromptUsage(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.rpc('increment_prompt_usage', { prompt_id: id });
+  }
+
+  async function uploadLibraryImage(dataUrl, promptId) {
+    if (!_client) return { error: 'not connected' };
+    const [meta, b64] = dataUrl.split(',');
+    const mime = meta.match(/:(.*?);/)[1];
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mime });
+    const ext  = mime.split('/')[1]?.split('+')[0] || 'png';
+    const path = `library/${promptId || Date.now()}.${ext}`;
+    const { error } = await _client.storage.from('post-images').upload(path, blob, { contentType: mime, upsert: true });
+    if (error) return { error };
+    const { data: urlData } = _client.storage.from('post-images').getPublicUrl(path);
+    return { url: urlData?.publicUrl };
+  }
+
   /* ── Post Templates ── */
   async function getPostTemplates() {
     if (!_client) return { data: [], error: 'not connected' };
@@ -317,5 +358,5 @@ const DB = (() => {
     }
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getPostTemplates, upsertPostTemplate, deletePostTemplate };
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage };
 })();

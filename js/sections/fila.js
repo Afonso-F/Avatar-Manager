@@ -32,8 +32,11 @@ async function renderFila(container) {
         <button class="btn btn-secondary btn-icon" id="fila-view-btn" onclick="toggleFilaView()" title="Mudar vista">
           <i class="fa-solid fa-${_filaState.view === 'lista' ? 'columns' : 'list'}"></i>
         </button>
+        <button class="btn btn-secondary" onclick="exportFilaCsv()">
+          <i class="fa-solid fa-file-csv"></i> Exportar CSV
+        </button>
         <button class="btn btn-secondary" onclick="openCsvImport()">
-          <i class="fa-solid fa-file-csv"></i> Importar CSV
+          <i class="fa-solid fa-file-import"></i> Importar CSV
         </button>
         <button class="btn btn-primary" onclick="app.navigate('criar')">
           <i class="fa-solid fa-plus"></i> Novo post
@@ -414,6 +417,38 @@ async function importCsvPosts() {
   app.toast(`${ok} posts importados${fail ? `, ${fail} falharam` : ''}`, ok > 0 ? 'success' : 'error');
   app.closeModal();
   renderFilaList();
+}
+
+/* ── Exportar CSV da Fila ── */
+function exportFilaCsv() {
+  const search   = (document.getElementById('fila-search')?.value || '').toLowerCase();
+  const avatarId = document.getElementById('fila-avatar')?.value || '';
+  const tab      = _filaState.tab;
+  const avatares = _filaState.avatares || [];
+
+  const posts = (_filaState.allPosts || []).filter(p => {
+    if (tab !== 'all' && p.status !== tab) return false;
+    if (avatarId && String(p.avatar_id) !== String(avatarId)) return false;
+    if (search && !(p.legenda || '').toLowerCase().includes(search)) return false;
+    return true;
+  }).sort((a, b) => new Date(a.agendado_para || 0) - new Date(b.agendado_para || 0));
+
+  if (!posts.length) { app.toast('Sem posts para exportar', 'warning'); return; }
+
+  const header = 'Data agendada,Avatar,Status,Plataformas,Legenda,Hashtags\n';
+  const rows   = posts.map(p => {
+    const av  = avatares.find(a => String(a.id) === String(p.avatar_id));
+    const leg = (p.legenda || '').replace(/"/g, '""');
+    const hsh = (p.hashtags || '').replace(/"/g, '""');
+    return `${p.agendado_para || ''},${av?.nome || ''},${p.status},"${(p.plataformas||[]).join(' ')}","${leg}","${hsh}"`;
+  }).join('\n');
+
+  const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href  = URL.createObjectURL(blob);
+  link.download = `fila_${new Date().toISOString().slice(0,10)}.csv`;
+  link.click();
+  app.toast(`${posts.length} posts exportados!`, 'success');
 }
 
 /* ── Notificações browser ── */
