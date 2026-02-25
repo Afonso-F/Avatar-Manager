@@ -286,7 +286,7 @@ const DB = (() => {
   /* ── Prompt Library ── */
   async function getPromptLibrary({ tipo, categoria, search } = {}) {
     if (!_client) return { data: [], error: 'not connected' };
-    let q = _client.from('prompt_library').select('*, avatares(nome)').order('criado_em', { ascending: false });
+    let q = _client.from('prompt_library').select('*').order('criado_em', { ascending: false });
     if (tipo)      q = q.eq('tipo', tipo);
     if (categoria) q = q.eq('categoria', categoria);
     if (search)    q = q.or(`titulo.ilike.%${search}%,prompt.ilike.%${search}%`);
