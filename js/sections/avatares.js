@@ -178,10 +178,14 @@ function openAvatarModal(id) {
       <label class="form-label">Imagens de referência <span class="text-muted" style="font-weight:400">(até 5 — usadas pela IA para gerar conteúdo)</span></label>
       <div class="ref-images-grid" id="av-ref-imgs"></div>
       <div class="form-hint mt-1">Adiciona fotos do avatar, exemplos de estilo ou inspiração visual</div>
-    </div>`;
+    </div>
+    <div id="av-gen-progress" style="min-height:22px;margin-top:12px;text-align:center;font-size:.82rem;color:var(--accent)"></div>`;
 
   const footer = `
     <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    ${isNew ? `<button id="btn-gerar-aleatorio" class="btn btn-ghost" onclick="gerarAvatarAleatorio()" title="Gera nome, personalidade, foto de perfil e imagens de referência automaticamente">
+      <i class="fa-solid fa-dice"></i> Gerar aleatório
+    </button>` : ''}
     <button class="btn btn-primary" onclick="saveAvatar('${id || ''}')">
       <i class="fa-solid fa-floppy-disk"></i> ${isNew ? 'Criar' : 'Guardar'}
     </button>`;
@@ -317,6 +321,114 @@ async function deleteAvatarConfirmed(id) {
   app.toast('Avatar apagado', 'success');
   app.closeModal();
   renderAvatares(document.getElementById('content'));
+}
+
+/* ── Geração aleatória de avatar com IA ── */
+async function gerarAvatarAleatorio() {
+  const btnGerar  = document.getElementById('btn-gerar-aleatorio');
+  const progressEl = document.getElementById('av-gen-progress');
+  const setProgress = (msg) => { if (progressEl) progressEl.innerHTML = msg; };
+
+  if (btnGerar) {
+    btnGerar.disabled = true;
+    btnGerar.innerHTML = '<div class="spinner" style="width:14px;height:14px;display:inline-block"></div> A gerar…';
+  }
+
+  try {
+    /* ── Passo 1: Gerar identidade completa ── */
+    setProgress('<i class="fa-solid fa-wand-magic-sparkles"></i> A criar identidade do avatar…');
+
+    const jsonPrompt = `Cria um avatar de criador de conteúdo fictício para redes sociais.
+Responde APENAS com JSON válido, sem markdown, sem código, sem backticks:
+{
+  "nome": "Nome único e criativo (1-2 palavras, soa real)",
+  "nicho": "Nicho de conteúdo específico e interessante",
+  "emoji": "1 emoji representativo do nicho",
+  "aparencia": "Descrição física detalhada em inglês para geração de imagem: etnia, cabelo (cor e estilo), cor dos olhos, expressão, roupa típica, ambiente/fundo sugerido",
+  "ambiente_lifestyle": "Ambiente/cenário em inglês para fotos de lifestyle relacionado com o nicho",
+  "categorias": ["máx 3 itens de: SFW, NSFW, Anime, Cosplay, Realista, Lifestyle, Gaming, Music, Fitness, Art"],
+  "plataformas": ["2-4 itens de: instagram, tiktok, facebook, youtube, fansly, onlyfans, patreon, twitch, spotify"],
+  "prompt_base": "Personalidade detalhada em português: estilo visual, tom de voz, características únicas, tipo de conteúdo que cria, como interage com a audiência — 3-4 frases ricas"
+}
+Sê muito criativo, específico e coerente. O avatar deve ter uma identidade única e memorável.`;
+
+    const rawJson = await Gemini.generateText(jsonPrompt, { temperature: 0.95 });
+
+    let data;
+    try {
+      const match = rawJson.match(/\{[\s\S]*\}/);
+      data = JSON.parse(match ? match[0] : rawJson);
+    } catch (_) {
+      throw new Error('Formato de resposta inválido. Tenta novamente.');
+    }
+
+    /* ── Passo 2: Preencher campos de texto ── */
+    setProgress('<i class="fa-solid fa-pen"></i> A preencher campos…');
+
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    setVal('av-nome',       data.nome);
+    setVal('av-nicho',      data.nicho);
+    setVal('av-emoji',      data.emoji || '🎭');
+    setVal('av-prompt',     data.prompt_base);
+
+    // Categorias
+    document.querySelectorAll('#av-cats .category-chip').forEach(chip => {
+      const cat = chip.dataset.cat;
+      const on  = (data.categorias || []).some(c => c.toLowerCase() === cat.toLowerCase());
+      chip.classList.toggle('active', on);
+    });
+
+    // Plataformas — resetar todas e activar as seleccionadas
+    document.querySelectorAll('#av-platforms .platform-toggle').forEach(toggle => {
+      const p  = toggle.dataset.p;
+      const on = (data.plataformas || []).includes(p);
+      const isActive = toggle.classList.contains('active');
+      if (on !== isActive) togglePlatformModal(toggle);
+    });
+
+    /* ── Passo 3: Gerar foto de perfil ── */
+    setProgress('<i class="fa-regular fa-image"></i> A gerar foto de perfil…');
+
+    const portraitPrompt = `Professional portrait photo, ${data.aparencia}, content creator for ${data.nicho}, soft diffused studio lighting, looking at camera, clean subtle gradient background, photorealistic, ultra high quality, 4K, sharp focus, Instagram-worthy headshot`;
+
+    const avatarDataUrl = await Gemini.generateImage(portraitPrompt, { aspectRatio: '1:1' });
+    if (avatarDataUrl) {
+      _refImagesState = [{ dataUrl: avatarDataUrl, isNew: true, _isPortrait: true }, ..._refImagesState.slice(0, 4)];
+      _renderRefImages();
+    }
+
+    /* ── Passo 4: Gerar 2 imagens de referência lifestyle ── */
+    const refPrompts = [
+      `Candid lifestyle photo, ${data.aparencia}, ${data.nicho} content creator, ${data.ambiente_lifestyle || data.nicho + ' setting'}, natural warm lighting, slightly shallow depth of field, Instagram aesthetic, photorealistic, high quality`,
+      `Behind-the-scenes content creation, ${data.aparencia}, creating ${data.nicho} content, aesthetic and cozy workspace, golden hour lighting, photorealistic, Instagram-worthy, lifestyle photography`,
+    ];
+
+    for (let i = 0; i < refPrompts.length; i++) {
+      if (_refImagesState.length >= 5) break;
+      setProgress(`<i class="fa-solid fa-images"></i> A gerar imagem de referência ${i + 1}/2…`);
+      try {
+        const refDataUrl = await Gemini.generateImage(refPrompts[i], { aspectRatio: '4:5' });
+        if (refDataUrl) {
+          _refImagesState.push({ dataUrl: refDataUrl, isNew: true });
+          _renderRefImages();
+        }
+      } catch (e) {
+        console.warn('Falha ao gerar imagem de referência ' + (i + 1), e);
+      }
+    }
+
+    setProgress('');
+    app.toast(`Avatar "${data.nome}" gerado! Revê os campos e guarda.`, 'success');
+
+  } catch (e) {
+    setProgress('');
+    app.toast('Erro: ' + e.message, 'error');
+  } finally {
+    if (btnGerar) {
+      btnGerar.disabled = false;
+      btnGerar.innerHTML = '<i class="fa-solid fa-dice"></i> Gerar aleatório';
+    }
+  }
 }
 
 /* ── Fansly Stats por Avatar ── */
