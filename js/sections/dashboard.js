@@ -1,16 +1,22 @@
 /* ============================================================
-   sections/dashboard.js
+   sections/dashboard.js — Dashboard geral (todos os conteúdos)
    ============================================================ */
 async function renderDashboard(container) {
-  // Fetch data
-  let posts = [], publicados = [];
+  let posts = [], publicados = [], avatares = [], canais = [], musicos = [];
+
   if (DB.ready()) {
-    const [pr, pp] = await Promise.all([
+    const [pr, pp, avRes, ytRes, muRes] = await Promise.all([
       DB.getPosts({ limit: 100 }),
-      DB.getPublicados({ limit: 100 })
+      DB.getPublicados({ limit: 100 }),
+      DB.getAvatares(),
+      DB.getYoutubeChannels(),
+      DB.getMusicos(),
     ]);
-    posts      = pr.data || [];
-    publicados = pp.data || [];
+    posts      = pr.data   || [];
+    publicados = pp.data   || [];
+    avatares   = avRes.data|| [];
+    canais     = ytRes.data|| [];
+    musicos    = muRes.data|| [];
   }
 
   const agendados  = posts.filter(p => p.status === 'agendado').length;
@@ -18,19 +24,46 @@ async function renderDashboard(container) {
   const totalPub   = publicados.length;
   const totalLikes = publicados.reduce((s, p) => s + (p.likes || 0), 0);
 
-  // Build calendar
-  const hoje       = new Date();
+  const receitaYT     = canais.reduce((s,c)  => s+(parseFloat(c.receita_mes)||0), 0);
+  const receitaMusica = musicos.reduce((s,m) => s+(parseFloat(m.receita_mes)||0), 0);
+
+  const hoje          = new Date();
   const scheduledDays = new Set(
     posts.filter(p => p.agendado_para).map(p => new Date(p.agendado_para).toDateString())
   );
 
   container.innerHTML = `
-    <!-- Stats -->
+    <!-- Overview de conteúdos digitais -->
     <div class="grid-4 mb-3">
-      ${statCard('fa-calendar-check', 'var(--accent-soft)', 'var(--accent)', agendados, 'Posts agendados', '')}
-      ${statCard('fa-file-pen',       'var(--yellow-soft)', 'var(--yellow)', rascunhos, 'Rascunhos',        '')}
-      ${statCard('fa-paper-plane',    'var(--green-soft)',  'var(--green)',  totalPub,  'Publicados (total)','up')}
-      ${statCard('fa-heart',          'var(--pink-soft)',   'var(--pink)',   app.formatNumber(totalLikes), 'Total de likes', 'up')}
+      <div class="stat-card" style="cursor:pointer" onclick="app.navigate('avatares')">
+        <div class="stat-icon" style="background:var(--pink-soft)"><i class="fa-solid fa-masks-theater" style="color:var(--pink)"></i></div>
+        <div class="stat-value">${avatares.length}</div>
+        <div class="stat-label">Avatares</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="app.navigate('youtube')">
+        <div class="stat-icon" style="background:var(--red-soft)"><i class="fa-brands fa-youtube" style="color:var(--red)"></i></div>
+        <div class="stat-value">${canais.length}</div>
+        <div class="stat-label">Canais YouTube</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="app.navigate('musicos')">
+        <div class="stat-icon" style="background:var(--accent-soft)"><i class="fa-solid fa-music" style="color:var(--accent)"></i></div>
+        <div class="stat-value">${musicos.length}</div>
+        <div class="stat-label">Músicos / Bandas</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="app.navigate('monetizacao')">
+        <div class="stat-icon" style="background:var(--green-soft)"><i class="fa-solid fa-euro-sign" style="color:var(--green)"></i></div>
+        <div class="stat-value">€${(receitaYT+receitaMusica).toFixed(0)}</div>
+        <div class="stat-label">Receita/mês</div>
+        <div class="stat-change up"><i class="fa-solid fa-arrow-up"></i> —</div>
+      </div>
+    </div>
+
+    <!-- Stats de posts -->
+    <div class="grid-4 mb-3">
+      ${statCard('fa-calendar-check','var(--accent-soft)','var(--accent)', agendados, 'Posts agendados', '')}
+      ${statCard('fa-file-pen','var(--yellow-soft)','var(--yellow)', rascunhos, 'Rascunhos', '')}
+      ${statCard('fa-paper-plane','var(--green-soft)','var(--green)', totalPub, 'Publicados (total)', 'up')}
+      ${statCard('fa-heart','var(--pink-soft)','var(--pink)', app.formatNumber(totalLikes), 'Total de likes', 'up')}
     </div>
 
     <div class="grid-2 mb-3">
@@ -52,6 +85,86 @@ async function renderDashboard(container) {
           <div class="card-title">Calendário</div>
         </div>
         <div class="mini-calendar">${buildCalendar(hoje, scheduledDays)}</div>
+      </div>
+    </div>
+
+    <!-- Vista rápida de conteúdos -->
+    <div class="grid-3 mb-3">
+      <!-- Avatares -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title"><i class="fa-solid fa-masks-theater" style="color:var(--pink)"></i> Avatares</div>
+            <div class="card-subtitle">Fansly — mês atual</div>
+          </div>
+          <button class="btn btn-sm btn-secondary" onclick="app.navigate('avatares')">Ver</button>
+        </div>
+        ${avatares.length ? `
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${avatares.slice(0,4).map(a => `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span>${a.emoji||'🎭'}</span>
+                  <span style="font-size:.85rem;font-weight:600">${a.nome}</span>
+                </div>
+                <button class="btn btn-sm btn-secondary" style="font-size:.7rem;padding:2px 8px" onclick="openAvatarFanslyModal('${a.id}','${(a.nome||'').replace(/'/g,"\\'")}','${(a.emoji||'🎭')}')">
+                  <i class="fa-solid fa-dollar-sign"></i> Fansly
+                </button>
+              </div>`).join('')}
+          </div>
+        ` : `<div class="empty-state" style="padding:20px"><p>Sem avatares. <a style="color:var(--accent);cursor:pointer" onclick="app.navigate('avatares')">Criar</a></p></div>`}
+      </div>
+
+      <!-- YouTube -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title"><i class="fa-brands fa-youtube" style="color:var(--red)"></i> YouTube</div>
+            <div class="card-subtitle">Views e receita AdSense</div>
+          </div>
+          <button class="btn btn-sm btn-secondary" onclick="app.navigate('youtube')">Ver</button>
+        </div>
+        ${canais.length ? `
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${canais.slice(0,4).map(c => `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+                <div>
+                  <div style="font-size:.85rem;font-weight:600">${c.nome}</div>
+                  <div style="font-size:.75rem;color:var(--text-muted)">${app.formatNumber(c.seguidores)} subs</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-size:.85rem;color:var(--green)">€${parseFloat(c.receita_mes||0).toFixed(2)}</div>
+                  <div style="font-size:.75rem;color:var(--text-muted)">${app.formatNumber(c.total_views)} views</div>
+                </div>
+              </div>`).join('')}
+          </div>
+        ` : `<div class="empty-state" style="padding:20px"><p>Sem canais. <a style="color:var(--accent);cursor:pointer" onclick="app.navigate('youtube')">Adicionar</a></p></div>`}
+      </div>
+
+      <!-- Músicos -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title"><i class="fa-solid fa-music" style="color:var(--accent)"></i> Música</div>
+            <div class="card-subtitle">Streams e royalties</div>
+          </div>
+          <button class="btn btn-sm btn-secondary" onclick="app.navigate('musicos')">Ver</button>
+        </div>
+        ${musicos.length ? `
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${musicos.slice(0,4).map(m => `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+                <div>
+                  <div style="font-size:.85rem;font-weight:600">${m.nome}</div>
+                  <div style="font-size:.75rem;color:var(--text-muted)">${app.formatNumber(m.ouvintes_mensais)} ouvintes/mês</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-size:.85rem;color:var(--accent)">€${parseFloat(m.receita_mes||0).toFixed(2)}</div>
+                  <div style="font-size:.75rem;color:var(--text-muted)">${app.formatNumber(m.total_streams)} streams</div>
+                </div>
+              </div>`).join('')}
+          </div>
+        ` : `<div class="empty-state" style="padding:20px"><p>Sem artistas. <a style="color:var(--accent);cursor:pointer" onclick="app.navigate('musicos')">Adicionar</a></p></div>`}
       </div>
     </div>
 
@@ -151,12 +264,10 @@ function buildCalendar(hoje, scheduledDays) {
   const startDow  = first.getDay();
 
   let cells = '';
-  // Pad previous month
   for (let i = 0; i < startDow; i++) {
     const d = new Date(year, month, -startDow + i + 1);
     cells += `<div class="cal-day other-month">${d.getDate()}</div>`;
   }
-  // Current month
   for (let d = 1; d <= lastDay; d++) {
     const date    = new Date(year, month, d);
     const isToday = date.toDateString() === hoje.toDateString();

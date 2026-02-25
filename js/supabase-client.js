@@ -96,6 +96,84 @@ const DB = (() => {
     return _client.from('contas').delete().eq('id', id);
   }
 
+  /* ── YouTube Channels ── */
+  async function getYoutubeChannels() {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('youtube_channels').select('*').order('nome');
+  }
+
+  async function upsertYoutubeChannel(channel) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('youtube_channels').upsert(channel).select().single();
+  }
+
+  async function deleteYoutubeChannel(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('youtube_channels').delete().eq('id', id);
+  }
+
+  /* ── YouTube Videos ── */
+  async function getYoutubeVideos(channelId) {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('youtube_videos').select('*').eq('channel_id', channelId).order('publicado_em', { ascending: false });
+  }
+
+  async function upsertYoutubeVideo(video) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('youtube_videos').upsert(video).select().single();
+  }
+
+  async function deleteYoutubeVideo(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('youtube_videos').delete().eq('id', id);
+  }
+
+  /* ── Músicos ── */
+  async function getMusicos() {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('musicos').select('*').order('nome');
+  }
+
+  async function upsertMusico(musico) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('musicos').upsert(musico).select().single();
+  }
+
+  async function deleteMusico(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('musicos').delete().eq('id', id);
+  }
+
+  /* ── Musico Tracks ── */
+  async function getMusicoTracks(musicoId) {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('musico_tracks').select('*').eq('musico_id', musicoId).order('streams', { ascending: false });
+  }
+
+  async function upsertMusicoTrack(track) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('musico_tracks').upsert(track).select().single();
+  }
+
+  async function deleteMusicoTrack(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('musico_tracks').delete().eq('id', id);
+  }
+
+  /* ── Fansly Stats ── */
+  async function getFanslyStats(avatarId, mes) {
+    if (!_client) return { data: [], error: 'not connected' };
+    let q = _client.from('fansly_stats').select('*').order('mes', { ascending: false });
+    if (avatarId) q = q.eq('avatar_id', avatarId);
+    if (mes)      q = q.eq('mes', mes);
+    return q;
+  }
+
+  async function upsertFanslyStats(stats) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('fansly_stats').upsert(stats, { onConflict: 'avatar_id,mes' }).select().single();
+  }
+
   /* ── Analytics ── */
   async function getAnalytics(avatar_id) {
     if (!_client) return { data: [], error: 'not connected' };
@@ -184,5 +262,5 @@ const DB = (() => {
     return { url: urlData?.publicUrl };
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo };
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats };
 })();

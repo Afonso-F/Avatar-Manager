@@ -110,6 +110,12 @@ body {
 .nav-item:hover { color: var(--text-primary); background: var(--bg-hover); }
 .nav-item.active { color: var(--accent); background: var(--accent-soft); }
 .nav-divider { height: 1px; background: var(--border); margin: 8px 4px; }
+.nav-section-label {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-muted);
+  padding: 12px 12px 4px; white-space: nowrap;
+}
+.sidebar.collapsed .nav-section-label { display: none; }
 
 .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
 .connection-status {
@@ -539,3 +545,45 @@ select.form-control { appearance: none; cursor: pointer; }
 .text-muted{color:var(--text-muted)} .text-sm{font-size:.82rem}
 .font-bold{font-weight:700} .w-full{width:100%}
 .text-center{text-align:center} .text-right{text-align:right}
+.flex-wrap{flex-wrap:wrap} .ml-1{margin-left:8px}
+
+/* ── Content Cards (YouTube, Músicos, Avatares) ── */
+.content-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  transition: border-color var(--transition);
+}
+.content-card:hover { border-color: var(--border-light); }
+
+.content-card-header {
+  display: flex; align-items: center; gap: 12px;
+}
+.content-card-img {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; overflow: hidden;
+}
+.content-card-name { font-weight: 700; font-size: .95rem; }
+.content-card-sub  { font-size: .78rem; color: var(--text-muted); }
+
+.metrics-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.metric-item {
+  text-align: center; padding: 8px 4px;
+  background: var(--bg-elevated); border-radius: var(--radius-sm);
+}
+.metric-item .metric-value { font-size: .9rem; font-weight: 700; }
+.metric-item .metric-label { font-size: .72rem; color: var(--text-muted); margin-top: 2px; }
+
+/* ── Grid 3 ── */
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 1100px) { .grid-3 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px)  { .grid-3 { grid-template-columns: 1fr; } }
+
+/* ── Badge variants ── */
+.badge-red { background: var(--red-soft); color: var(--red); }

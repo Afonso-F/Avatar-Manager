@@ -3,14 +3,16 @@
    ============================================================ */
 const Config = (() => {
   const KEYS = {
-    GEMINI:      'as_gemini_key',
-    SUPABASE_URL:'as_supabase_url',
-    SUPABASE_KEY:'as_supabase_key',
-    INSTAGRAM:   'as_instagram_token',
-    TIKTOK:      'as_tiktok_token',
-    FACEBOOK:    'as_facebook_token',
-    YOUTUBE:     'as_youtube_token',
-    ACTIVE_AVATAR:'as_active_avatar',
+    GEMINI:        'as_gemini_key',
+    SUPABASE_URL:  'as_supabase_url',
+    SUPABASE_KEY:  'as_supabase_key',
+    INSTAGRAM:     'as_instagram_token',
+    TIKTOK:        'as_tiktok_token',
+    FACEBOOK:      'as_facebook_token',
+    YOUTUBE:       'as_youtube_token',
+    ACTIVE_AVATAR: 'as_active_avatar',
+    FANSLY:        'as_fansly_token',
+    SPOTIFY:       'as_spotify_token',
   };
 
   // Valores pré-configurados (podem ser sobrescritos nas Configurações)
