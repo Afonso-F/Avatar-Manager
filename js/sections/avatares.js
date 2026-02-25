@@ -5,6 +5,21 @@
 // Estado das imagens de referência no modal de avatar
 let _refImagesState = []; // { url, isNew, dataUrl? }
 
+// Todas as plataformas suportadas
+const PLATAFORMAS_AVATAR = ['instagram','tiktok','facebook','youtube','fansly','onlyfans','patreon','twitch','spotify'];
+
+// Categorias/tags predefinidas
+const CATEGORIAS_PRESET = ['SFW','NSFW','Anime','Cosplay','Realista','Lifestyle','Gaming','Music','Fitness','Art'];
+
+// Escape simples para uso em atributos HTML
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 async function renderAvatares(container) {
   let avatares = [];
 
@@ -43,12 +58,24 @@ async function renderAvatares(container) {
 
 function renderAvatarCard(a, isActive) {
   const platforms = (a.plataformas || []).map(p =>
-    `<span class="platform-toggle active ${p}" style="cursor:default">${app.platformIcon(p)} ${p}</span>`
+    `<span class="platform-toggle active ${p}" style="cursor:default">${app.platformIcon(p)} ${app.platformLabel(p)}</span>`
   ).join('');
   const refs     = a.imagens_referencia || [];
   const refCount = refs.length;
-  // Usa a primeira imagem de referência como avatar; fallback para imagem_url, depois emoji
   const avatarSrc = refs[0] || a.imagem_url || null;
+
+  // Profile URL
+  const profileLink = a.profile_url
+    ? `<a class="avatar-profile-link" href="${escHtml(a.profile_url)}" target="_blank" rel="noopener" title="Perfil público">
+         <i class="fa-solid fa-arrow-up-right-from-square"></i> ${escHtml(a.profile_url.replace(/^https?:\/\//, ''))}
+       </a>`
+    : '';
+
+  // Categorias
+  const cats = Array.isArray(a.categorias) ? a.categorias : [];
+  const catTags = cats.length
+    ? `<div class="avatar-cat-row">${cats.map(c => `<span class="avatar-cat-tag ${c.toLowerCase()}">${escHtml(c)}</span>`).join('')}</div>`
+    : '';
 
   return `
     <div class="avatar-card${isActive ? ' active-avatar' : ''}" id="ac-${a.id}">
@@ -56,35 +83,39 @@ function renderAvatarCard(a, isActive) {
       <div class="flex items-center gap-2">
         <div class="avatar-img">
           ${avatarSrc
-            ? `<img src="${avatarSrc}" alt="${a.nome}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-            : `<span>${a.emoji || '🎭'}</span>`}
+            ? `<img src="${escHtml(avatarSrc)}" alt="${escHtml(a.nome)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+            : `<span>${escHtml(a.emoji || '🎭')}</span>`}
         </div>
-        <div>
-          <div class="avatar-name">${a.nome}</div>
-          <div class="avatar-niche">${a.nicho}</div>
+        <div style="min-width:0">
+          <div class="avatar-name">${escHtml(a.nome)}</div>
+          <div class="avatar-niche">${escHtml(a.nicho)}</div>
+          ${profileLink}
         </div>
       </div>
+
+      ${catTags}
 
       <div class="avatar-meta platform-toggles">
         ${platforms}
       </div>
 
-      ${a.prompt_base ? `<div class="text-sm text-muted" style="line-height:1.5;font-style:italic">"${a.prompt_base}"</div>` : ''}
+      ${a.prompt_base ? `<div class="text-sm text-muted" style="line-height:1.5;font-style:italic">"${escHtml(a.prompt_base)}"</div>` : ''}
       ${refCount > 0 ? `<div class="text-sm text-muted" style="display:flex;align-items:center;gap:5px"><i class="fa-regular fa-images" style="color:var(--accent)"></i> ${refCount} imagem(ns) de referência</div>` : ''}
 
       <div class="flex gap-1 mt-1">
-        ${!isActive ? `<button class="btn btn-sm btn-secondary flex-1" onclick="setActiveAvatar('${a.id}')"><i class="fa-solid fa-star"></i> Ativar</button>` : '<span class="btn btn-sm btn-secondary flex-1 text-center" style="cursor:default;opacity:.5"><i class="fa-solid fa-star"></i> Ativo</span>'}
+        ${!isActive
+          ? `<button class="btn btn-sm btn-secondary flex-1" onclick="setActiveAvatar('${a.id}')"><i class="fa-solid fa-star"></i> Ativar</button>`
+          : '<span class="btn btn-sm btn-secondary flex-1 text-center" style="cursor:default;opacity:.5"><i class="fa-solid fa-star"></i> Ativo</span>'}
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarFanslyModal('${a.id}')" title="Fansly"><i class="fa-solid fa-dollar-sign" style="color:var(--pink)"></i></button>
-        <button class="btn btn-sm btn-secondary btn-icon" onclick="openContasModal('${a.id}','${a.nome}')" title="Contas sociais"><i class="fa-solid fa-link"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openContasModal('${a.id}','${escHtml(a.nome)}')" title="Contas sociais"><i class="fa-solid fa-link"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarModal('${a.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
-        <button class="btn btn-sm btn-danger btn-icon" onclick="confirmDeleteAvatar('${a.id}', this.dataset.nome)" data-nome="${(a.nome || '').replace(/"/g, '&quot;')}" title="Apagar"><i class="fa-solid fa-trash"></i></button>
+        <button class="btn btn-sm btn-danger btn-icon" onclick="confirmDeleteAvatar('${a.id}', this.dataset.nome)" data-nome="${escHtml(a.nome)}" title="Apagar"><i class="fa-solid fa-trash"></i></button>
       </div>
     </div>`;
 }
 
 function setActiveAvatar(id) {
   Config.set('ACTIVE_AVATAR', id);
-  // Re-render
   const avatares = app.getAvatares();
   const grid = document.getElementById('avatarGrid');
   if (grid) grid.innerHTML = avatares.map(a => renderAvatarCard(a, String(a.id) === String(id))).join('');
@@ -96,38 +127,52 @@ function openAvatarModal(id) {
   const a = id ? avatares.find(x => String(x.id) === String(id)) : null;
   const isNew = !a;
 
-  // Inicializar estado das imagens de referência
   _refImagesState = (a?.imagens_referencia || []).map(url => ({ url, isNew: false }));
+  const avatarCats = Array.isArray(a?.categorias) ? a.categorias : [];
 
   const body = `
     <div class="form-group">
       <label class="form-label">Nome *</label>
-      <input id="av-nome" class="form-control" value="${a?.nome || ''}" placeholder="Ex: Luna">
+      <input id="av-nome" class="form-control" value="${escHtml(a?.nome || '')}" placeholder="Ex: Luna">
     </div>
     <div class="form-group">
       <label class="form-label">Nicho *</label>
-      <input id="av-nicho" class="form-control" value="${a?.nicho || ''}" placeholder="Ex: Lifestyle & Wellness">
+      <input id="av-nicho" class="form-control" value="${escHtml(a?.nicho || '')}" placeholder="Ex: Lifestyle &amp; Wellness">
     </div>
     <div class="form-group">
       <label class="form-label">Emoji / Ícone</label>
-      <input id="av-emoji" class="form-control" value="${a?.emoji || '🎭'}" placeholder="🎭" maxlength="4">
+      <input id="av-emoji" class="form-control" value="${escHtml(a?.emoji || '🎭')}" placeholder="🎭" maxlength="4">
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL do perfil público</label>
+      <input id="av-profile-url" class="form-control" value="${escHtml(a?.profile_url || '')}" placeholder="https://fansly.com/minhaconta">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categorias</label>
+      <div class="category-chips" id="av-cats">
+        ${CATEGORIAS_PRESET.map(c => {
+          const active = avatarCats.includes(c);
+          return `<div class="category-chip${active ? ' active' : ''} ${c.toLowerCase()}" data-cat="${escHtml(c)}" onclick="toggleCategoryChip(this)">${escHtml(c)}</div>`;
+        }).join('')}
+      </div>
+      <div class="form-hint mt-1">Clica para selecionar/deselecionar</div>
     </div>
     <div class="form-group">
       <label class="form-label">Prompt base (personalidade para o Gemini)</label>
-      <textarea id="av-prompt" class="form-control" rows="3" placeholder="Descreve o estilo, tom e personalidade do avatar…">${a?.prompt_base || ''}</textarea>
+      <textarea id="av-prompt" class="form-control" rows="3" placeholder="Descreve o estilo, tom e personalidade do avatar…">${escHtml(a?.prompt_base || '')}</textarea>
     </div>
     <div class="form-group">
       <label class="form-label">Plataformas</label>
       <div class="platform-toggles" id="av-platforms">
-        ${['instagram','tiktok','facebook','youtube'].map(p => {
+        ${PLATAFORMAS_AVATAR.map(p => {
           const active = (a?.plataformas || []).includes(p);
-          return `<div class="platform-toggle${active ? ' active ' + p : ''}" data-p="${p}" onclick="togglePlatformModal(this)">${app.platformIcon(p)} ${p}</div>`;
+          return `<div class="platform-toggle${active ? ' active ' + p : ''}" data-p="${p}" onclick="togglePlatformModal(this)">${app.platformIcon(p)} ${app.platformLabel(p)}</div>`;
         }).join('')}
       </div>
     </div>
     <div class="form-group">
       <label class="form-label">URL da imagem (opcional)</label>
-      <input id="av-img" class="form-control" value="${a?.imagem_url || ''}" placeholder="https://…">
+      <input id="av-img" class="form-control" value="${escHtml(a?.imagem_url || '')}" placeholder="https://…">
     </div>
     <div class="form-group mb-0">
       <label class="form-label">Imagens de referência <span class="text-muted" style="font-weight:400">(até 5 — usadas pela IA para gerar conteúdo)</span></label>
@@ -142,8 +187,12 @@ function openAvatarModal(id) {
     </button>`;
 
   app.openModal(isNew ? 'Novo avatar' : `Editar — ${a.nome}`, body, footer);
-  // Renderizar grid após o modal ser injetado no DOM
   setTimeout(() => _renderRefImages(), 0);
+}
+
+function toggleCategoryChip(el) {
+  const cat = el.dataset.cat;
+  el.classList.toggle('active');
 }
 
 function _renderRefImages() {
@@ -186,28 +235,33 @@ function togglePlatformModal(el) {
 }
 
 async function saveAvatar(id) {
-  const nome      = document.getElementById('av-nome').value.trim();
-  const nicho     = document.getElementById('av-nicho').value.trim();
-  const emoji     = document.getElementById('av-emoji').value.trim();
-  const prompt    = document.getElementById('av-prompt').value.trim();
-  const imgUrl    = document.getElementById('av-img').value.trim();
-  const platforms = [...document.querySelectorAll('#av-platforms .platform-toggle.active')].map(el => el.dataset.p);
+  const nome       = document.getElementById('av-nome').value.trim();
+  const nicho      = document.getElementById('av-nicho').value.trim();
+  const emoji      = document.getElementById('av-emoji').value.trim();
+  const prompt     = document.getElementById('av-prompt').value.trim();
+  const imgUrl     = document.getElementById('av-img').value.trim();
+  const profileUrl = document.getElementById('av-profile-url').value.trim();
+  const platforms  = [...document.querySelectorAll('#av-platforms .platform-toggle.active')].map(el => el.dataset.p);
+  const categorias = [...document.querySelectorAll('#av-cats .category-chip.active')].map(el => el.dataset.cat);
 
   if (!nome || !nicho) { app.toast('Nome e nicho são obrigatórios', 'error'); return; }
 
-  const avatar = { nome, nicho, emoji, prompt_base: prompt, plataformas: platforms, imagem_url: imgUrl };
+  const avatar = {
+    nome, nicho, emoji, prompt_base: prompt,
+    plataformas: platforms, imagem_url: imgUrl,
+    profile_url: profileUrl || null,
+    categorias,
+  };
   if (id) avatar.id = id;
 
   if (DB.ready()) {
-    // 1. Guardar avatar para obter o ID (necessário para o path no Storage)
     const { data: saved, error } = await DB.upsertAvatar(avatar);
     if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
 
     const savedId = saved?.id || id;
-
-    // 2. Upload de novas imagens de referência e colecionar todos os URLs
     const storagePrefix = savedId || String(Date.now());
     const refUrls = [];
+
     for (const img of _refImagesState) {
       if (!img.isNew) {
         refUrls.push(img.url);
@@ -221,13 +275,11 @@ async function saveAvatar(id) {
       }
     }
 
-    // 3. Atualizar avatar com os URLs das imagens de referência (update para não sobrescrever outros campos)
     if (savedId) {
       const { error: refErr } = await DB.updateAvatarRefImages(savedId, refUrls);
       if (refErr) console.warn('Erro ao guardar imagens de referência:', refErr);
     }
   } else {
-    // Modo local (sem Supabase)
     avatar.imagens_referencia = _refImagesState.filter(i => !i.isNew).map(i => i.url);
     const list = app.getAvatares();
     if (id) {
@@ -248,7 +300,7 @@ async function saveAvatar(id) {
 function confirmDeleteAvatar(id, nome) {
   app.openModal(
     'Apagar avatar',
-    `<p>Tens a certeza que queres apagar <strong>${nome}</strong>? Esta ação é irreversível.</p>`,
+    `<p>Tens a certeza que queres apagar <strong>${escHtml(nome)}</strong>? Esta ação é irreversível.</p>`,
     `<button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
      <button class="btn btn-danger" onclick="deleteAvatarConfirmed('${id}')"><i class="fa-solid fa-trash"></i> Apagar</button>`
   );
@@ -269,7 +321,6 @@ async function deleteAvatarConfirmed(id) {
 
 /* ── Fansly Stats por Avatar ── */
 async function openAvatarFanslyModal(avatarId) {
-  // Lookup avatar from cached list
   const a = app.getAvatares().find(x => String(x.id) === String(avatarId));
   const avatarNome = a?.nome || '';
   const refs       = a?.imagens_referencia || [];
@@ -290,11 +341,11 @@ async function openAvatarFanslyModal(avatarId) {
     <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(124,58,237,0.1));border:1px solid rgba(236,72,153,0.3);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
       <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center">
         ${avatarSrc
-          ? `<img src="${avatarSrc}" style="width:100%;height:100%;object-fit:cover">`
-          : `<span style="font-size:1.8rem">${a?.emoji || '🎭'}</span>`}
+          ? `<img src="${escHtml(avatarSrc)}" style="width:100%;height:100%;object-fit:cover">`
+          : `<span style="font-size:1.8rem">${escHtml(a?.emoji || '🎭')}</span>`}
       </div>
       <div>
-        <div style="font-weight:700;font-size:1.05rem">${avatarNome}</div>
+        <div style="font-weight:700;font-size:1.05rem">${escHtml(avatarNome)}</div>
         <div style="font-size:.8rem;color:var(--pink)"><i class="fa-solid fa-dollar-sign"></i> Fansly</div>
       </div>
     </div>
@@ -326,7 +377,7 @@ async function openAvatarFanslyModal(avatarId) {
     </div>
     <div class="form-group mb-0">
       <label class="form-label">Notas</label>
-      <textarea id="avfl-notas" class="form-control" rows="2" placeholder="Observações…">${statMesAtual?.notas||''}</textarea>
+      <textarea id="avfl-notas" class="form-control" rows="2" placeholder="Observações…">${escHtml(statMesAtual?.notas||'')}</textarea>
     </div>
 
     ${statsHistorico.length > 0 ? `
@@ -376,7 +427,6 @@ async function saveAvatarFanslyStats(avatarId, mes, existingId) {
 
   app.toast('Stats Fansly guardadas!', 'success');
   app.closeModal();
-  // Re-renderizar a secção activa se for monetizacao ou avatares
   const hash = location.hash.replace('#', '');
   const content = document.getElementById('content');
   if (content) {
@@ -391,6 +441,11 @@ const PLATAFORMAS_INFO = {
   tiktok:    { label: 'TikTok',     icon: 'fa-brands fa-tiktok icon-tiktok',       placeholder_id: 'Ex: 6784563210987654',   placeholder_user: 'Ex: @minha_conta' },
   facebook:  { label: 'Facebook',   icon: 'fa-brands fa-facebook icon-facebook',   placeholder_id: 'Ex: 123456789012345',    placeholder_user: 'Ex: Nome da Página' },
   youtube:   { label: 'YouTube',    icon: 'fa-brands fa-youtube icon-youtube',     placeholder_id: 'Ex: UCxxxxxxxxxxxxxx',   placeholder_user: 'Ex: @meucanal' },
+  fansly:    { label: 'Fansly',     icon: 'fa-solid fa-dollar-sign icon-fansly',   placeholder_id: 'Ex: fansly_id_123',      placeholder_user: 'Ex: @minhaconta' },
+  onlyfans:  { label: 'OnlyFans',   icon: 'fa-solid fa-fire icon-onlyfans',        placeholder_id: 'Ex: of_id_123',          placeholder_user: 'Ex: @minhaconta' },
+  patreon:   { label: 'Patreon',    icon: 'fa-brands fa-patreon icon-patreon',     placeholder_id: 'Ex: patreon_id_123',     placeholder_user: 'Ex: minhapagina' },
+  twitch:    { label: 'Twitch',     icon: 'fa-brands fa-twitch icon-twitch',       placeholder_id: 'Ex: twitch_id_123',      placeholder_user: 'Ex: meucanal' },
+  spotify:   { label: 'Spotify',    icon: 'fa-brands fa-spotify icon-spotify',     placeholder_id: 'Ex: spotify_id_123',     placeholder_user: 'Ex: Artista' },
 };
 
 async function openContasModal(avatarId, avatarNome) {
@@ -416,25 +471,25 @@ async function openContasModal(avatarId, avatarNome) {
             <div class="grid-2" style="gap:8px">
               <div>
                 <label class="form-label" style="font-size:.75rem">Username / Handle</label>
-                <input class="form-control" data-field="username" value="${c.username || ''}" placeholder="${info.placeholder_user}">
+                <input class="form-control" data-field="username" value="${escHtml(c.username || '')}" placeholder="${escHtml(info.placeholder_user)}">
               </div>
               <div>
                 <label class="form-label" style="font-size:.75rem">ID da Conta</label>
-                <input class="form-control" data-field="conta_id" value="${c.conta_id || ''}" placeholder="${info.placeholder_id}">
+                <input class="form-control" data-field="conta_id" value="${escHtml(c.conta_id || '')}" placeholder="${escHtml(info.placeholder_id)}">
               </div>
             </div>
             <div class="mt-2">
               <label class="form-label" style="font-size:.75rem">Access Token</label>
               <div class="key-field">
-                <input class="form-control" type="password" data-field="access_token" value="${c.access_token || ''}" placeholder="Token de acesso OAuth…">
+                <input class="form-control" type="password" data-field="access_token" value="${escHtml(c.access_token || '')}" placeholder="Token de acesso OAuth…">
                 <button class="key-toggle" onclick="this.previousElementSibling.type=this.previousElementSibling.type==='password'?'text':'password';this.innerHTML=this.previousElementSibling.type==='password'?'<i class=\\'fa-solid fa-eye\\'></i>':'<i class=\\'fa-solid fa-eye-slash\\'></i>'"><i class="fa-solid fa-eye"></i></button>
               </div>
             </div>
             <div class="mt-2">
               <label class="form-label" style="font-size:.75rem">Notas (opcional)</label>
-              <input class="form-control" data-field="notas" value="${c.notas || ''}" placeholder="Ex: Conta principal, expira em Março…">
+              <input class="form-control" data-field="notas" value="${escHtml(c.notas || '')}" placeholder="Ex: Conta principal, expira em Março…">
             </div>
-            <input type="hidden" data-field="id" value="${c.id || ''}">
+            <input type="hidden" data-field="id" value="${escHtml(c.id || '')}">
           </div>`;
       }).join('')}
     </div>`;
@@ -464,7 +519,6 @@ async function saveContas(avatarId) {
     const notas        = get('notas');
     const existingId   = get('id');
 
-    // Só guarda se tiver pelo menos um campo preenchido
     if (!username && !conta_id && !access_token) continue;
 
     const payload = { avatar_id: avatarId, plataforma, username, conta_id, access_token, notas };
