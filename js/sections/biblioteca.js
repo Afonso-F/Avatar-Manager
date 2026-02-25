@@ -462,9 +462,9 @@ async function confirmarSaveToLibrary(tipo) {
 
   // Tentar guardar imagem no Storage se existir data URL
   let imagem_url = null;
-  if (tipo === 'imagem' && window._criarState?.imageDataUrl && DB.ready()) {
+  if (tipo === 'imagem' && typeof _criarState !== 'undefined' && _criarState?.imageDataUrl && DB.ready()) {
     const tempId = `lib-${Date.now()}`;
-    const { url } = await DB.uploadLibraryImage(window._criarState.imageDataUrl, tempId);
+    const { url } = await DB.uploadLibraryImage(_criarState.imageDataUrl, tempId);
     imagem_url = url || null;
   }
 
