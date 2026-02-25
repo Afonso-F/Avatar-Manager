@@ -107,6 +107,38 @@ function renderConfiguracoes(container) {
       </div>
     </div>
 
+    <!-- fal.ai Vídeo IA -->
+    <div class="settings-section">
+      <div class="settings-section-title"><i class="fa-solid fa-film"></i> fal.ai — Geração de Vídeo com IA</div>
+      <div class="grid-2">
+        <div class="form-group mb-0">
+          <label class="form-label">API Key <a href="https://fal.ai/dashboard/keys" target="_blank" class="text-sm" style="color:var(--accent)">(obter chave)</a></label>
+          <div class="key-field">
+            <input id="cfg-falai" class="form-control" type="password" value="${cfg.FAL_AI}" placeholder="key-…">
+            <button class="key-toggle" onclick="toggleKeyVisibility('cfg-falai', this)"><i class="fa-solid fa-eye"></i></button>
+          </div>
+          <div class="form-hint">Usada para gerar vídeos (Wan 2.6, Kling, LTX…)</div>
+        </div>
+        <div class="form-group mb-0">
+          <label class="form-label">Modelo de vídeo</label>
+          <select id="cfg-video-model" class="form-control">
+            <option value="fal-ai/wan/v2.1/t2v-480p" ${(cfg.VIDEO_MODEL||'fal-ai/wan/v2.1/t2v-480p')==='fal-ai/wan/v2.1/t2v-480p'?'selected':''}>Wan 2.1 T2V 480p (padrão)</option>
+            <option value="fal-ai/wan/v2.1/t2v-720p" ${cfg.VIDEO_MODEL==='fal-ai/wan/v2.1/t2v-720p'?'selected':''}>Wan 2.1 T2V 720p</option>
+            <option value="fal-ai/wan/v2.6/t2v-480p" ${cfg.VIDEO_MODEL==='fal-ai/wan/v2.6/t2v-480p'?'selected':''}>Wan 2.6 T2V 480p</option>
+            <option value="fal-ai/wan/v2.6/t2v-720p" ${cfg.VIDEO_MODEL==='fal-ai/wan/v2.6/t2v-720p'?'selected':''}>Wan 2.6 T2V 720p</option>
+            <option value="fal-ai/kling-video/v2.1/standard/text-to-video" ${cfg.VIDEO_MODEL==='fal-ai/kling-video/v2.1/standard/text-to-video'?'selected':''}>Kling v2.1 Standard</option>
+            <option value="fal-ai/kling-video/v2.1/pro/text-to-video" ${cfg.VIDEO_MODEL==='fal-ai/kling-video/v2.1/pro/text-to-video'?'selected':''}>Kling v2.1 Pro</option>
+            <option value="fal-ai/ltx-video" ${cfg.VIDEO_MODEL==='fal-ai/ltx-video'?'selected':''}>LTX Video</option>
+          </select>
+          <div class="form-hint">Se não configurares o fal.ai, usa Veo 2 (Google) como fallback</div>
+        </div>
+      </div>
+      <div class="mt-2">
+        <button class="btn btn-sm btn-secondary" onclick="testFalAi()"><i class="fa-solid fa-flask"></i> Testar fal.ai</button>
+        <span id="falai-test-result" class="text-sm ml-1"></span>
+      </div>
+    </div>
+
     <!-- GitHub Actions -->
     <div class="settings-section">
       <div class="settings-section-title"><i class="fa-brands fa-github"></i> GitHub Actions</div>
@@ -150,6 +182,8 @@ function saveAllConfigs() {
     YOUTUBE:      'cfg-youtube',
     FANSLY:       'cfg-fansly',
     SPOTIFY:      'cfg-spotify',
+    FAL_AI:       'cfg-falai',
+    VIDEO_MODEL:  'cfg-video-model',
   };
   for (const [key, elId] of Object.entries(map)) {
     const el = document.getElementById(elId);
@@ -195,6 +229,27 @@ async function testSupabase() {
   } else {
     el.innerHTML = '<span style="color:var(--red)"><i class="fa-solid fa-circle-xmark"></i> Falhou</span>';
     app.toast('Supabase falhou', 'error');
+  }
+}
+
+async function testFalAi() {
+  const key   = document.getElementById('cfg-falai')?.value.trim();
+  const model = document.getElementById('cfg-video-model')?.value || 'fal-ai/wan/v2.1/t2v-480p';
+  if (!key) { app.toast('Introduz uma API key fal.ai primeiro', 'warning'); return; }
+  const el = document.getElementById('falai-test-result');
+  el.textContent = 'A testar…';
+  try {
+    // Verificar que a chave é válida fazendo um request de status (não gera vídeo)
+    const res = await fetch(`https://queue.fal.run/${model}/requests`, {
+      method: 'GET',
+      headers: { 'Authorization': `Key ${key}` }
+    });
+    if (res.status === 401 || res.status === 403) throw new Error('Chave inválida ou sem permissões.');
+    el.innerHTML = '<span style="color:var(--green)"><i class="fa-solid fa-circle-check"></i> Chave válida!</span>';
+    app.toast('fal.ai OK!', 'success');
+  } catch (e) {
+    el.innerHTML = `<span style="color:var(--red)"><i class="fa-solid fa-circle-xmark"></i> Erro: ${e.message}</span>`;
+    app.toast('Erro fal.ai: ' + e.message, 'error');
   }
 }
 

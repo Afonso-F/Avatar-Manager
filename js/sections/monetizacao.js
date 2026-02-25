@@ -22,6 +22,8 @@ async function renderMonetizacao(container) {
     fanslyStats = fRes.data || [];
   }
 
+  _despesasCache = [];  // reset
+
   // Calcular receitas
   const receitaFansly  = fanslyStats.reduce((s,f) => s + (parseFloat(f.receita)||0) + (parseFloat(f.tips)||0), 0);
   const receitaYoutube = canais.reduce((s,c) => s + (parseFloat(c.receita_mes)||0), 0);
@@ -40,6 +42,11 @@ async function renderMonetizacao(container) {
       <div>
         <div class="section-title">Monetização</div>
         <div class="section-subtitle">Receitas de todos os conteúdos — ${mesNome}</div>
+      </div>
+      <div class="flex gap-1">
+        <button class="btn btn-secondary" onclick="exportReceitasCsv()">
+          <i class="fa-solid fa-file-csv"></i> Exportar CSV
+        </button>
       </div>
     </div>
 
@@ -175,6 +182,24 @@ async function renderMonetizacao(container) {
       </div>
     </div>
 
+    <!-- Metas de receita -->
+    <div class="card mb-3" id="meta-receita-card">
+      ${renderMetaReceita(totalReceita)}
+    </div>
+
+    <!-- Despesas -->
+    <div class="card mb-3" id="despesas-card">
+      <div class="card-header">
+        <div class="card-title"><i class="fa-solid fa-receipt" style="color:var(--red)"></i> Despesas</div>
+        <button class="btn btn-sm btn-secondary" onclick="openDespesaForm()">
+          <i class="fa-solid fa-plus"></i> Adicionar
+        </button>
+      </div>
+      <div id="despesas-list">
+        <div class="spinner-block"><div class="spinner"></div></div>
+      </div>
+    </div>
+
     <!-- Distribuição por tipo -->
     <div class="card mb-3">
       <div class="card-header">
@@ -184,7 +209,7 @@ async function renderMonetizacao(container) {
       ${renderRevenueDistribution(receitaFansly, receitaYoutube, receitaMusicos, totalReceita)}
     </div>
 
-    <!-- Dicas de otimização -->
+    <!-- Dicas -->
     <div class="card">
       <div class="card-header"><div class="card-title"><i class="fa-solid fa-lightbulb" style="color:var(--yellow)"></i> Dicas de monetização</div></div>
       <div style="display:flex;flex-direction:column;gap:10px">
@@ -200,6 +225,9 @@ async function renderMonetizacao(container) {
       </div>
     </div>
   `;
+
+  // Carregar despesas após render
+  loadDespesas();
 }
 
 function renderRevenueDistribution(fansly, youtube, musicos, total) {
@@ -229,6 +257,227 @@ function renderRevenueDistribution(fansly, youtube, musicos, total) {
           </div>`;
       }).join('')}
     </div>`;
+}
+
+/* ── Metas de receita ── */
+function renderMetaReceita(totalReceita) {
+  const meta  = parseFloat(localStorage.getItem('as_meta_receita') || '0');
+  const pct   = meta > 0 ? Math.min(100, Math.round((totalReceita / meta) * 100)) : 0;
+  const color = pct >= 100 ? 'var(--green)' : pct >= 60 ? 'var(--yellow)' : 'var(--accent)';
+
+  return `
+    <div class="card-header">
+      <div class="card-title"><i class="fa-solid fa-bullseye" style="color:var(--accent)"></i> Meta de receita mensal</div>
+      <button class="btn btn-sm btn-ghost" onclick="openMetaReceita()"><i class="fa-solid fa-pen"></i> Editar</button>
+    </div>
+    ${meta > 0 ? `
+      <div style="margin-top:8px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span class="text-sm" style="color:${color}">€${totalReceita.toFixed(2)} / €${meta.toFixed(2)}</span>
+          <span class="text-sm;font-weight:700" style="color:${color}">${pct}%</span>
+        </div>
+        <div class="progress-bar" style="height:12px;border-radius:6px">
+          <div class="progress-fill" style="width:${pct}%;background:${color};border-radius:6px;transition:width 0.6s ease"></div>
+        </div>
+        <div class="text-sm text-muted mt-2">
+          ${pct >= 100
+            ? '<i class="fa-solid fa-trophy" style="color:var(--yellow)"></i> Meta atingida! Parabéns!'
+            : `Faltam €${(meta - totalReceita).toFixed(2)} para atingir a meta`}
+        </div>
+      </div>` : `
+      <div class="text-sm text-muted mt-2">
+        Sem meta definida. <button class="btn btn-sm btn-ghost" onclick="openMetaReceita()">Definir meta</button>
+      </div>`}`;
+}
+
+function openMetaReceita() {
+  const atual = localStorage.getItem('as_meta_receita') || '';
+  const body  = `
+    <div class="form-group mb-0">
+      <label class="form-label">Meta mensal (€)</label>
+      <input id="meta-val" class="form-control" type="number" min="0" step="0.01" value="${atual}" placeholder="Ex: 5000">
+    </div>`;
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveMetaReceita()"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>`;
+  app.openModal('Meta de receita mensal', body, footer);
+  setTimeout(() => document.getElementById('meta-val')?.focus(), 100);
+}
+
+function saveMetaReceita() {
+  const val = parseFloat(document.getElementById('meta-val')?.value || '0');
+  if (isNaN(val) || val < 0) { app.toast('Valor inválido', 'warning'); return; }
+  localStorage.setItem('as_meta_receita', val.toString());
+  app.toast('Meta guardada!', 'success');
+  app.closeModal();
+  // Re-render o card
+  const card = document.getElementById('meta-receita-card');
+  if (card) {
+    const totalEl = document.querySelector('[style*="font-size:2.5rem"]');
+    const totalStr = totalEl?.textContent.replace('€','').trim() || '0';
+    card.innerHTML = renderMetaReceita(parseFloat(totalStr));
+  }
+}
+
+/* ── Despesas ── */
+let _despesasCache = [];
+
+async function loadDespesas() {
+  const el = document.getElementById('despesas-list');
+  if (!el) return;
+
+  if (DB.ready()) {
+    const { data } = await DB.getDespesas();
+    _despesasCache = data || [];
+  }
+
+  renderDespesasList();
+}
+
+function renderDespesasList() {
+  const el = document.getElementById('despesas-list');
+  if (!el) return;
+
+  const total = _despesasCache.reduce((s, d) => s + parseFloat(d.valor || 0), 0);
+
+  if (!_despesasCache.length) {
+    el.innerHTML = `<div class="text-muted text-sm text-center" style="padding:20px">
+      Sem despesas registadas. <button class="btn btn-sm btn-ghost" onclick="openDespesaForm()">Adicionar</button>
+    </div>`;
+    return;
+  }
+
+  const categColors = {
+    producao:    'var(--accent)',
+    ads:         'var(--yellow)',
+    software:    'var(--blue)',
+    equipamento: 'var(--pink)',
+    outro:       'var(--text-muted)',
+  };
+
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${_despesasCache.map(d => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg-elevated);border-radius:8px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="badge" style="background:${categColors[d.categoria]||'var(--text-muted)'}20;color:${categColors[d.categoria]||'var(--text-muted)'}">
+              ${d.categoria || 'outro'}
+            </span>
+            <div>
+              <div style="font-size:.85rem;font-weight:600">${d.descricao}</div>
+              <div style="font-size:.75rem;color:var(--text-muted)">${d.data || ''}</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:var(--red)">-€${parseFloat(d.valor).toFixed(2)}</span>
+            <button class="btn btn-sm btn-danger btn-icon" onclick="deleteDespesa('${d.id}')" title="Apagar"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </div>`).join('')}
+      <div style="border-top:1px solid var(--border);padding-top:8px;text-align:right">
+        <span class="text-sm text-muted">Total despesas: </span>
+        <span style="font-weight:700;color:var(--red)">€${total.toFixed(2)}</span>
+      </div>
+    </div>`;
+}
+
+function openDespesaForm(existing) {
+  const body = `
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Descrição</label>
+        <input id="desp-desc" class="form-control" value="${existing?.descricao || ''}" placeholder="Ex: Adobe CC, Meta Ads…">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Valor (€)</label>
+        <input id="desp-valor" class="form-control" type="number" min="0" step="0.01" value="${existing?.valor || ''}">
+      </div>
+      <div class="form-group mb-0">
+        <label class="form-label">Categoria</label>
+        <select id="desp-cat" class="form-control">
+          ${['producao','ads','software','equipamento','outro'].map(c =>
+            `<option value="${c}" ${(existing?.categoria || 'outro') === c ? 'selected' : ''}>${c}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="form-group mb-0">
+        <label class="form-label">Data</label>
+        <input id="desp-data" class="form-control" type="date" value="${existing?.data || new Date().toISOString().slice(0,10)}">
+      </div>
+    </div>`;
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveDespesa('${existing?.id || ''}')">
+      <i class="fa-solid fa-floppy-disk"></i> Guardar
+    </button>`;
+  app.openModal(existing ? 'Editar despesa' : 'Adicionar despesa', body, footer);
+  setTimeout(() => document.getElementById('desp-desc')?.focus(), 100);
+}
+
+async function saveDespesa(id) {
+  const descricao  = document.getElementById('desp-desc')?.value.trim();
+  const valor      = parseFloat(document.getElementById('desp-valor')?.value || '0');
+  const categoria  = document.getElementById('desp-cat')?.value || 'outro';
+  const data       = document.getElementById('desp-data')?.value;
+
+  if (!descricao) { app.toast('Adiciona uma descrição', 'warning'); return; }
+  if (isNaN(valor) || valor <= 0) { app.toast('Valor inválido', 'warning'); return; }
+
+  const despesa = { descricao, valor, categoria, data };
+  if (id) despesa.id = id;
+
+  if (DB.ready()) {
+    const { data: saved, error } = await DB.upsertDespesa(despesa);
+    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+    if (id) {
+      _despesasCache = _despesasCache.map(d => String(d.id) === String(id) ? { ...d, ...despesa } : d);
+    } else {
+      _despesasCache = [saved || despesa, ..._despesasCache];
+    }
+  } else {
+    if (id) {
+      _despesasCache = _despesasCache.map(d => String(d.id) === String(id) ? { ...d, ...despesa } : d);
+    } else {
+      _despesasCache = [{ id: Date.now(), ...despesa }, ..._despesasCache];
+    }
+  }
+
+  app.toast('Despesa guardada!', 'success');
+  app.closeModal();
+  renderDespesasList();
+}
+
+async function deleteDespesa(id) {
+  if (!confirm('Apagar esta despesa?')) return;
+  if (DB.ready()) {
+    const { error } = await DB.deleteDespesa(id);
+    if (error) { app.toast('Erro: ' + error, 'error'); return; }
+  }
+  _despesasCache = _despesasCache.filter(d => String(d.id) !== String(id));
+  renderDespesasList();
+  app.toast('Despesa apagada', 'success');
+}
+
+/* ── Exportar CSV de receitas ── */
+function exportReceitasCsv() {
+  const rows = [
+    ['Tipo', 'Nome', 'Receita (€)'],
+  ];
+
+  // Adicionar despesas ao CSV também
+  const despesas = _despesasCache || [];
+
+  // Construir CSV simples
+  const csvContent = [
+    'data:text/csv;charset=utf-8,',
+    'Tipo,Nome,Valor (€),Categoria\n',
+    ...despesas.map(d => `Despesa,"${d.descricao}","-${parseFloat(d.valor).toFixed(2)}","${d.categoria || ''}"\n`),
+  ].join('');
+
+  const link = document.createElement('a');
+  link.href = encodeURI(csvContent);
+  link.download = `despesas_${new Date().toISOString().slice(0,10)}.csv`;
+  link.click();
+  app.toast('CSV exportado!', 'success');
 }
 
 // openAvatarFanslyModal está definido em avatares.js e é partilhado globalmente

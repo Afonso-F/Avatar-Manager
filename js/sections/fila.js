@@ -1,7 +1,7 @@
 /* ============================================================
    sections/fila.js — Fila / Agenda
    ============================================================ */
-let _filaState = { tab: 'agendado', avatarFilter: '', page: 0 };
+let _filaState = { tab: 'agendado', avatarFilter: '', page: 0, view: 'lista' };
 const FILA_PAGE_SIZE = 10;
 
 async function renderFila(container) {
@@ -28,15 +28,23 @@ async function renderFila(container) {
         <div class="section-title">Fila / Agenda</div>
         <div class="section-subtitle">Posts agendados e rascunhos</div>
       </div>
-      <button class="btn btn-primary" onclick="app.navigate('criar')">
-        <i class="fa-solid fa-plus"></i> Novo post
-      </button>
+      <div class="flex gap-1">
+        <button class="btn btn-secondary btn-icon" id="fila-view-btn" onclick="toggleFilaView()" title="Mudar vista">
+          <i class="fa-solid fa-${_filaState.view === 'lista' ? 'columns' : 'list'}"></i>
+        </button>
+        <button class="btn btn-secondary" onclick="openCsvImport()">
+          <i class="fa-solid fa-file-csv"></i> Importar CSV
+        </button>
+        <button class="btn btn-primary" onclick="app.navigate('criar')">
+          <i class="fa-solid fa-plus"></i> Novo post
+        </button>
+      </div>
     </div>
 
     <div class="tabs" id="fila-tabs">
-      <button class="tab-btn${_filaState.tab === 'agendado'  ? ' active' : ''}" onclick="setFilaTab('agendado', this)">Agendados</button>
-      <button class="tab-btn${_filaState.tab === 'rascunho'  ? ' active' : ''}" onclick="setFilaTab('rascunho', this)">Rascunhos</button>
-      <button class="tab-btn${_filaState.tab === 'all'       ? ' active' : ''}" onclick="setFilaTab('all', this)">Todos</button>
+      <button class="tab-btn${_filaState.tab === 'agendado' ? ' active' : ''}" onclick="setFilaTab('agendado', this)">Agendados</button>
+      <button class="tab-btn${_filaState.tab === 'rascunho' ? ' active' : ''}" onclick="setFilaTab('rascunho', this)">Rascunhos</button>
+      <button class="tab-btn${_filaState.tab === 'all'      ? ' active' : ''}" onclick="setFilaTab('all', this)">Todos</button>
     </div>
 
     <div class="filter-bar">
@@ -54,6 +62,15 @@ async function renderFila(container) {
     <div id="fila-pagination"></div>`;
 
   renderFilaList();
+  initBrowserNotifications();
+}
+
+/* ── Vista: lista ↔ kanban ── */
+function toggleFilaView() {
+  _filaState.view = _filaState.view === 'lista' ? 'kanban' : 'lista';
+  const btn = document.getElementById('fila-view-btn');
+  if (btn) btn.innerHTML = `<i class="fa-solid fa-${_filaState.view === 'lista' ? 'columns' : 'list'}"></i>`;
+  renderFilaList();
 }
 
 function setFilaTab(tab, btn) {
@@ -65,10 +82,12 @@ function setFilaTab(tab, btn) {
 }
 
 function renderFilaList() {
-  const search    = (document.getElementById('fila-search')?.value || '').toLowerCase();
-  const avatarId  = document.getElementById('fila-avatar')?.value || '';
-  const tab       = _filaState.tab;
-  const page      = _filaState.page;
+  if (_filaState.view === 'kanban') { renderFilaKanban(); return; }
+
+  const search   = (document.getElementById('fila-search')?.value || '').toLowerCase();
+  const avatarId = document.getElementById('fila-avatar')?.value || '';
+  const tab      = _filaState.tab;
+  const page     = _filaState.page;
 
   let posts = (_filaState.allPosts || []).filter(p => {
     if (tab !== 'all' && p.status !== tab) return false;
@@ -88,50 +107,114 @@ function renderFilaList() {
 
   if (!paginated.length) {
     listEl.innerHTML = `<div class="empty-state"><i class="fa-regular fa-calendar-xmark"></i><p>Nenhum post encontrado</p></div>`;
-    pagEl.innerHTML  = '';
+    if (pagEl) pagEl.innerHTML = '';
     return;
   }
 
   const avatares = _filaState.avatares || [];
-
   listEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">
-    ${paginated.map(p => {
-      const av = avatares.find(a => String(a.id) === String(p.avatar_id));
-      const platforms = (p.plataformas || []).map(pl => app.platformIcon(pl)).join(' ');
+    ${paginated.map(p => renderPostCard(p, avatares)).join('')}
+  </div>`;
+
+  const totalPages = Math.ceil(total / FILA_PAGE_SIZE);
+  if (!pagEl || totalPages <= 1) { if (pagEl) pagEl.innerHTML = ''; return; }
+  let html = '<div class="pagination">';
+  html += `<button class="page-btn" onclick="setFilaPage(${page - 1})" ${page === 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left"></i></button>`;
+  for (let i = 0; i < totalPages; i++) {
+    html += `<button class="page-btn${i === page ? ' active' : ''}" onclick="setFilaPage(${i})">${i + 1}</button>`;
+  }
+  html += `<button class="page-btn" onclick="setFilaPage(${page + 1})" ${page >= totalPages - 1 ? 'disabled' : ''}><i class="fa-solid fa-chevron-right"></i></button>`;
+  html += '</div>';
+  pagEl.innerHTML = html;
+}
+
+/* ── Kanban ── */
+function renderFilaKanban() {
+  const listEl = document.getElementById('fila-list');
+  const pagEl  = document.getElementById('fila-pagination');
+  if (!listEl) return;
+  if (pagEl)   pagEl.innerHTML = '';
+
+  const search   = (document.getElementById('fila-search')?.value || '').toLowerCase();
+  const avatarId = document.getElementById('fila-avatar')?.value || '';
+  const avatares = _filaState.avatares || [];
+
+  const allPosts = (_filaState.allPosts || []).filter(p => {
+    if (avatarId && String(p.avatar_id) !== String(avatarId)) return false;
+    if (search && !(p.legenda || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const columns = [
+    { key: 'rascunho', label: 'Rascunhos', icon: 'fa-pencil', color: 'var(--text-muted)' },
+    { key: 'agendado', label: 'Agendados', icon: 'fa-clock', color: 'var(--accent)' },
+    { key: 'publicado', label: 'Publicados', icon: 'fa-check-circle', color: 'var(--green)' },
+  ];
+
+  listEl.innerHTML = `<div class="kanban-board">
+    ${columns.map(col => {
+      const colPosts = allPosts
+        .filter(p => p.status === col.key)
+        .sort((a, b) => new Date(a.agendado_para || a.criado_em) - new Date(b.agendado_para || b.criado_em));
+
       return `
-        <div class="post-card">
-          <div class="post-thumb">
-            ${p.imagem_url ? `<img src="${p.imagem_url}" alt="">` : '<i class="fa-regular fa-image"></i>'}
+        <div class="kanban-col">
+          <div class="kanban-col-header">
+            <span style="color:${col.color}"><i class="fa-solid ${col.icon}"></i> ${col.label}</span>
+            <span class="kanban-count">${colPosts.length}</span>
           </div>
-          <div class="post-body">
-            <div class="post-caption">${p.legenda || '(sem legenda)'}</div>
-            <div class="post-meta">
-              ${app.statusBadge(p.status)}
-              ${av ? `<span class="text-sm text-muted">${av.emoji || '🎭'} ${av.nome}</span>` : ''}
-              <span class="post-time"><i class="fa-regular fa-clock"></i> ${app.formatDate(p.agendado_para)}</span>
-              <span class="text-sm text-muted">${platforms}</span>
-            </div>
-          </div>
-          <div class="post-actions flex-col gap-1">
-            <button class="btn btn-sm btn-secondary btn-icon" onclick="editPost('${p.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn btn-sm btn-danger btn-icon"    onclick="deleteFilaPost('${p.id}')" title="Apagar"><i class="fa-solid fa-trash"></i></button>
+          <div class="kanban-col-body">
+            ${colPosts.length === 0
+              ? `<div class="kanban-empty">Sem posts</div>`
+              : colPosts.map(p => renderKanbanCard(p, avatares)).join('')
+            }
           </div>
         </div>`;
     }).join('')}
   </div>`;
+}
 
-  // Pagination
-  const totalPages = Math.ceil(total / FILA_PAGE_SIZE);
-  if (totalPages <= 1) { pagEl.innerHTML = ''; return; }
+function renderPostCard(p, avatares) {
+  const av       = avatares.find(a => String(a.id) === String(p.avatar_id));
+  const platforms = (p.plataformas || []).map(pl => app.platformIcon(pl)).join(' ');
+  return `
+    <div class="post-card">
+      <div class="post-thumb">
+        ${p.imagem_url ? `<img src="${p.imagem_url}" alt="">` : '<i class="fa-regular fa-image"></i>'}
+      </div>
+      <div class="post-body">
+        <div class="post-caption">${p.legenda || '(sem legenda)'}</div>
+        <div class="post-meta">
+          ${app.statusBadge(p.status)}
+          ${av ? `<span class="text-sm text-muted">${av.emoji || '🎭'} ${av.nome}</span>` : ''}
+          <span class="post-time"><i class="fa-regular fa-clock"></i> ${app.formatDate(p.agendado_para)}</span>
+          <span class="text-sm text-muted">${platforms}</span>
+        </div>
+      </div>
+      <div class="post-actions flex-col gap-1">
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="editPost('${p.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
+        <button class="btn btn-sm btn-danger btn-icon"    onclick="deleteFilaPost('${p.id}')" title="Apagar"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    </div>`;
+}
 
-  let paginationHTML = '<div class="pagination">';
-  paginationHTML += `<button class="page-btn" onclick="setFilaPage(${page - 1})" ${page === 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left"></i></button>`;
-  for (let i = 0; i < totalPages; i++) {
-    paginationHTML += `<button class="page-btn${i === page ? ' active' : ''}" onclick="setFilaPage(${i})">${i + 1}</button>`;
-  }
-  paginationHTML += `<button class="page-btn" onclick="setFilaPage(${page + 1})" ${page >= totalPages - 1 ? 'disabled' : ''}><i class="fa-solid fa-chevron-right"></i></button>`;
-  paginationHTML += '</div>';
-  pagEl.innerHTML = paginationHTML;
+function renderKanbanCard(p, avatares) {
+  const av        = avatares.find(a => String(a.id) === String(p.avatar_id));
+  const platforms = (p.plataformas || []).map(pl => app.platformIcon(pl)).join(' ');
+  return `
+    <div class="kanban-card">
+      ${p.imagem_url ? `<img src="${p.imagem_url}" alt="" class="kanban-thumb">` : ''}
+      <div class="kanban-caption">${(p.legenda || '(sem legenda)').slice(0, 100)}${(p.legenda||'').length > 100 ? '…' : ''}</div>
+      <div class="kanban-meta">
+        ${av ? `<span class="text-sm text-muted">${av.emoji || '🎭'} ${av.nome}</span>` : ''}
+        <span class="text-sm text-muted"><i class="fa-regular fa-clock"></i> ${app.formatDate(p.agendado_para)}</span>
+        <span class="text-sm">${platforms}</span>
+      </div>
+      <div class="kanban-actions">
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="editPost('${p.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
+        <button class="btn btn-sm btn-danger btn-icon" onclick="deleteFilaPost('${p.id}')" title="Apagar"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    </div>`;
 }
 
 function setFilaPage(p) {
@@ -139,6 +222,7 @@ function setFilaPage(p) {
   renderFilaList();
 }
 
+/* ── Editar Post ── */
 function editPost(id) {
   const post = (_filaState.allPosts || []).find(p => String(p.id) === String(id));
   if (!post) { app.toast('Post não encontrado', 'error'); return; }
@@ -188,6 +272,13 @@ function editPost(id) {
   app.openModal('Editar post', body, footer);
 }
 
+function togglePlatformModal(el) {
+  const p = el.dataset.p;
+  const wasActive = el.classList.contains('active');
+  el.classList.toggle('active', !wasActive);
+  if (!wasActive) el.classList.add(p); else el.classList.remove(p);
+}
+
 async function saveEditedPost(id) {
   const legenda   = document.getElementById('edit-legenda').value.trim();
   const hashtags  = document.getElementById('edit-hashtags').value.trim();
@@ -198,9 +289,7 @@ async function saveEditedPost(id) {
   if (!legenda) { app.toast('Adiciona uma legenda', 'warning'); return; }
 
   const updated = {
-    id,
-    legenda,
-    hashtags,
+    id, legenda, hashtags,
     plataformas:   platforms,
     status,
     agendado_para: schedule ? new Date(schedule).toISOString() : null,
@@ -228,4 +317,138 @@ async function deleteFilaPost(id) {
   _filaState.allPosts = (_filaState.allPosts || []).filter(p => String(p.id) !== String(id));
   app.toast('Post apagado', 'success');
   renderFilaList();
+}
+
+/* ── Importar CSV ── */
+function openCsvImport() {
+  const body = `
+    <div class="form-group">
+      <label class="form-label">Ficheiro CSV</label>
+      <input type="file" accept=".csv" class="form-control" id="csv-file" onchange="previewCsv(this)">
+      <div class="form-hint mt-1">
+        Formato: <code>data,legenda,hashtags,plataformas,avatar_id</code><br>
+        Exemplo: <code>2026-03-01 14:00,Olá mundo!,#hello #world,instagram tiktok,</code>
+      </div>
+    </div>
+    <div id="csv-preview" style="margin-top:12px"></div>`;
+
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" id="csv-import-btn" onclick="importCsvPosts()" disabled>
+      <i class="fa-solid fa-file-import"></i> Importar
+    </button>`;
+
+  app.openModal('Importar posts via CSV', body, footer);
+  window._csvPosts = [];
+}
+
+function previewCsv(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines  = e.target.result.split('\n').filter(l => l.trim());
+    const posts  = [];
+    const errors = [];
+
+    // Ignorar cabeçalho se existir
+    const start = lines[0].toLowerCase().includes('data') ? 1 : 0;
+
+    for (let i = start; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+      if (cols.length < 2) continue;
+      const [dataStr, legenda, hashtags = '', platformsStr = 'instagram', avatarId = ''] = cols;
+      const date = new Date(dataStr);
+      if (isNaN(date)) { errors.push(`Linha ${i+1}: data inválida "${dataStr}"`); continue; }
+      if (!legenda)    { errors.push(`Linha ${i+1}: legenda vazia`); continue; }
+      posts.push({
+        agendado_para: date.toISOString(),
+        legenda,
+        hashtags,
+        plataformas: platformsStr.split(/\s+/).filter(Boolean),
+        avatar_id:   avatarId || null,
+        status:      'agendado',
+      });
+    }
+
+    window._csvPosts = posts;
+    const btn = document.getElementById('csv-import-btn');
+    if (btn) btn.disabled = posts.length === 0;
+
+    const preview = document.getElementById('csv-preview');
+    if (preview) {
+      preview.innerHTML = `
+        <div class="text-sm" style="margin-bottom:8px">
+          <span style="color:var(--green)">${posts.length} posts válidos</span>
+          ${errors.length ? `<span style="color:var(--red);margin-left:8px">${errors.length} erros</span>` : ''}
+        </div>
+        ${posts.slice(0, 5).map(p => `
+          <div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:8px;margin-bottom:6px;font-size:.8rem">
+            <strong>${app.formatDate(p.agendado_para)}</strong> — ${p.legenda.slice(0, 60)}…
+          </div>`).join('')}
+        ${posts.length > 5 ? `<div class="text-sm text-muted">… e mais ${posts.length - 5} posts</div>` : ''}
+        ${errors.map(e => `<div class="text-sm" style="color:var(--red)">${e}</div>`).join('')}`;
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function importCsvPosts() {
+  const posts = window._csvPosts || [];
+  if (!posts.length) { app.toast('Nenhum post válido para importar', 'warning'); return; }
+
+  const btn = document.getElementById('csv-import-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div> A importar…'; }
+
+  let ok = 0, fail = 0;
+  for (const post of posts) {
+    if (DB.ready()) {
+      const { error } = await DB.upsertPost(post);
+      if (error) { fail++; } else { ok++; _filaState.allPosts = [...(_filaState.allPosts || []), post]; }
+    } else {
+      _filaState.allPosts = [...(_filaState.allPosts || []), post];
+      ok++;
+    }
+  }
+
+  app.toast(`${ok} posts importados${fail ? `, ${fail} falharam` : ''}`, ok > 0 ? 'success' : 'error');
+  app.closeModal();
+  renderFilaList();
+}
+
+/* ── Notificações browser ── */
+function initBrowserNotifications() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+  // Verificar posts agendados a cada 60s
+  if (window._notifInterval) clearInterval(window._notifInterval);
+  window._notifInterval = setInterval(checkScheduledNotifications, 60000);
+  checkScheduledNotifications();
+}
+
+function checkScheduledNotifications() {
+  if (Notification.permission !== 'granted') return;
+  const now    = new Date();
+  const cutoff = new Date(now.getTime() + 15 * 60 * 1000); // próximos 15 min
+  const posts  = (_filaState.allPosts || []).filter(p => {
+    if (p.status !== 'agendado' || !p.agendado_para) return false;
+    const t = new Date(p.agendado_para);
+    return t > now && t <= cutoff;
+  });
+
+  const notified = JSON.parse(localStorage.getItem('as_notified_posts') || '{}');
+  for (const post of posts) {
+    if (notified[post.id]) continue;
+    const t = new Date(post.agendado_para);
+    const diff = Math.round((t - now) / 60000);
+    new Notification('ContentHub — Post em breve!', {
+      body: `"${(post.legenda || '').slice(0, 80)}" — daqui a ${diff} min`,
+      icon: '/favicon.ico',
+      tag:  post.id,
+    });
+    notified[post.id] = true;
+    localStorage.setItem('as_notified_posts', JSON.stringify(notified));
+  }
 }
