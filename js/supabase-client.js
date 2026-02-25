@@ -286,7 +286,7 @@ const DB = (() => {
   /* ── Prompt Library ── */
   async function getPromptLibrary({ tipo, categoria, search } = {}) {
     if (!_client) return { data: [], error: 'not connected' };
-    let q = _client.from('prompt_library').select('*, avatares(nome)').order('criado_em', { ascending: false });
+    let q = _client.from('prompt_library').select('*').order('criado_em', { ascending: false });
     if (tipo)      q = q.eq('tipo', tipo);
     if (categoria) q = q.eq('categoria', categoria);
     if (search)    q = q.or(`titulo.ilike.%${search}%,prompt.ilike.%${search}%`);
@@ -324,6 +324,22 @@ const DB = (() => {
     return { url: urlData?.publicUrl };
   }
 
+  /* ── Campanhas ── */
+  async function getCampanhas() {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('campanhas').select('*').order('criado_em', { ascending: false });
+  }
+
+  async function upsertCampanha(campanha) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('campanhas').upsert(campanha).select().single();
+  }
+
+  async function deleteCampanha(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('campanhas').delete().eq('id', id);
+  }
+
   /* ── Post Templates ── */
   async function getPostTemplates() {
     if (!_client) return { data: [], error: 'not connected' };
@@ -358,5 +374,5 @@ const DB = (() => {
     }
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage };
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage };
 })();
