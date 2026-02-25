@@ -340,6 +340,78 @@ const DB = (() => {
     return _client.from('campanhas').delete().eq('id', id);
   }
 
+  /* ── OnlyFans Stats ── */
+  async function getOnlyfansStats(avatarId, mes) {
+    if (!_client) return { data: [], error: 'not connected' };
+    let q = _client.from('onlyfans_stats').select('*').order('mes', { ascending: false });
+    if (avatarId) q = q.eq('avatar_id', avatarId);
+    if (mes)      q = q.eq('mes', mes);
+    return q;
+  }
+
+  async function upsertOnlyfansStats(stats) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('onlyfans_stats').upsert(stats, { onConflict: 'avatar_id,mes' }).select().single();
+  }
+
+  /* ── Patreon Stats ── */
+  async function getPatreonStats(mes) {
+    if (!_client) return { data: [], error: 'not connected' };
+    let q = _client.from('patreon_stats').select('*').order('mes', { ascending: false });
+    if (mes) q = q.eq('mes', mes);
+    return q;
+  }
+
+  async function upsertPatreonStats(stats) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('patreon_stats').upsert(stats, { onConflict: 'mes' }).select().single();
+  }
+
+  /* ── Twitch Stats ── */
+  async function getTwitchStats(mes) {
+    if (!_client) return { data: [], error: 'not connected' };
+    let q = _client.from('twitch_stats').select('*').order('mes', { ascending: false });
+    if (mes) q = q.eq('mes', mes);
+    return q;
+  }
+
+  async function upsertTwitchStats(stats) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('twitch_stats').upsert(stats, { onConflict: 'mes' }).select().single();
+  }
+
+  /* ── Afiliados ── */
+  async function getAfiliados() {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('afiliados').select('*').order('nome');
+  }
+
+  async function upsertAfiliado(afiliado) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('afiliados').upsert(afiliado).select().single();
+  }
+
+  async function deleteAfiliado(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('afiliados').delete().eq('id', id);
+  }
+
+  /* ── Vendas Diretas ── */
+  async function getVendasDiretas() {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('vendas_diretas').select('*').order('data', { ascending: false });
+  }
+
+  async function upsertVendaDireta(venda) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('vendas_diretas').upsert(venda).select().single();
+  }
+
+  async function deleteVendaDireta(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('vendas_diretas').delete().eq('id', id);
+  }
+
   /* ── Post Templates ── */
   async function getPostTemplates() {
     if (!_client) return { data: [], error: 'not connected' };
@@ -374,5 +446,5 @@ const DB = (() => {
     }
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage };
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage, getOnlyfansStats, upsertOnlyfansStats, getPatreonStats, upsertPatreonStats, getTwitchStats, upsertTwitchStats, getAfiliados, upsertAfiliado, deleteAfiliado, getVendasDiretas, upsertVendaDireta, deleteVendaDireta };
 })();
