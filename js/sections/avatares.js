@@ -376,6 +376,13 @@ async function saveAvatarFanslyStats(avatarId, mes, existingId) {
 
   app.toast('Stats Fansly guardadas!', 'success');
   app.closeModal();
+  // Re-renderizar a secção activa se for monetizacao ou avatares
+  const hash = location.hash.replace('#', '');
+  const content = document.getElementById('content');
+  if (content) {
+    if (hash === 'monetizacao') renderMonetizacao(content);
+    else if (hash === 'avatares') renderAvatares(content);
+  }
 }
 
 /* ── Contas de redes sociais ── */

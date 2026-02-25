@@ -229,7 +229,7 @@ async function openYoutubeVideosModal(channelId, channelNome) {
 
   const body = `
     <div style="margin-bottom:16px">
-      <button class="btn btn-sm btn-primary" onclick="openAddVideoModal('${channelId}')">
+      <button class="btn btn-sm btn-primary" onclick="openAddVideoModal('${channelId}','${channelNome.replace(/'/g,"\\'")}')">
         <i class="fa-solid fa-plus"></i> Adicionar vídeo
       </button>
     </div>
@@ -263,7 +263,7 @@ async function openYoutubeVideosModal(channelId, channelNome) {
   app.openModal(`Vídeos — ${channelNome}`, body, `<button class="btn btn-secondary" onclick="app.closeModal()">Fechar</button>`);
 }
 
-async function openAddVideoModal(channelId) {
+async function openAddVideoModal(channelId, channelNome = '') {
   const body = `
     <div class="form-group">
       <label class="form-label">Título *</label>
@@ -303,7 +303,7 @@ async function openAddVideoModal(channelId) {
     </div>`;
 
   app.openModal('Adicionar vídeo', body, `
-    <button class="btn btn-secondary" onclick="openYoutubeVideosModal('${channelId}','Canal')">Voltar</button>
+    <button class="btn btn-secondary" onclick="openYoutubeVideosModal('${channelId}','${channelNome.replace(/'/g,"\\'")}')">Voltar</button>
     <button class="btn btn-primary" onclick="saveYoutubeVideo('${channelId}')">
       <i class="fa-solid fa-floppy-disk"></i> Guardar
     </button>`);

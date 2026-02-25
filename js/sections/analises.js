@@ -151,10 +151,10 @@ async function renderAnalises(container) {
 
   destroyCharts();
   await loadAnalytics();
+  // Guardar dados em cache — gráficos de YouTube/Música só são renderizados
+  // quando o utilizador muda para esse tipo (evita Chart.js com display:none → dimensões 0)
   _cachedCanais  = canais;
   _cachedMusicos = musicos;
-  await loadYoutubeAnalytics();
-  await loadMusicoAnalytics();
 }
 
 let _cachedCanais  = [];
