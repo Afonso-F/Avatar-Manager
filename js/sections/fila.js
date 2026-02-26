@@ -520,10 +520,14 @@ function initBrowserNotifications() {
   if (Notification.permission === 'default') {
     Notification.requestPermission();
   }
-  // Verificar posts agendados a cada 60s
+  // Verificar posts agendados e publicados a cada 60s
   if (window._notifInterval) clearInterval(window._notifInterval);
-  window._notifInterval = setInterval(checkScheduledNotifications, 60000);
+  window._notifInterval = setInterval(() => {
+    checkScheduledNotifications();
+    checkPublishedNotifications();
+  }, 60000);
   checkScheduledNotifications();
+  checkPublishedNotifications();
 }
 
 function checkScheduledNotifications() {
@@ -549,4 +553,47 @@ function checkScheduledNotifications() {
     notified[post.id] = true;
     localStorage.setItem('as_notified_posts', JSON.stringify(notified));
   }
+}
+
+async function checkPublishedNotifications() {
+  if (Notification.permission !== 'granted') return;
+  if (!DB.ready()) return;
+
+  // Na primeira execução apenas inicializar o registo sem enviar notificações
+  const stored = localStorage.getItem('as_notified_published');
+  const isFirstRun = stored === null;
+  const notified = isFirstRun ? {} : JSON.parse(stored);
+
+  const [{ data: published }, { data: errors }] = await Promise.all([
+    DB.getPosts({ status: 'publicado', limit: 50 }),
+    DB.getPosts({ status: 'erro',      limit: 50 }),
+  ]);
+
+  for (const post of (published || [])) {
+    if (!notified[post.id]) {
+      if (!isFirstRun) {
+        new Notification('ContentHub — Post publicado!', {
+          body: `"${(post.legenda || '').slice(0, 80)}" foi publicado com sucesso`,
+          icon: '/favicon.ico',
+          tag:  `pub_${post.id}`,
+        });
+      }
+      notified[post.id] = 'publicado';
+    }
+  }
+
+  for (const post of (errors || [])) {
+    if (!notified[post.id]) {
+      if (!isFirstRun) {
+        new Notification('ContentHub — Erro na publicação', {
+          body: `"${(post.legenda || '').slice(0, 80)}" falhou${post.error_msg ? ': ' + post.error_msg.slice(0, 60) : ''}`,
+          icon: '/favicon.ico',
+          tag:  `err_${post.id}`,
+        });
+      }
+      notified[post.id] = 'erro';
+    }
+  }
+
+  localStorage.setItem('as_notified_published', JSON.stringify(notified));
 }
