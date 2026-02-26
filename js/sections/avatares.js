@@ -503,7 +503,7 @@ async function saveAvatar(id) {
 
   if (DB.ready()) {
     const { data: saved, error } = await DB.upsertAvatar(avatar);
-    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
 
     const savedId = saved?.id || id;
     const storagePrefix = savedId || String(Date.now());
@@ -777,7 +777,7 @@ async function saveAvatarFanslyStats(avatarId, mes, existingId) {
 
   if (DB.ready()) {
     const { error } = await DB.upsertFanslyStats(payload);
-    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
   }
 
   app.toast('Stats Fansly guardadas!', 'success');
@@ -947,7 +947,7 @@ async function saveAvatarOnlyfansStats(avatarId, mes, existingId) {
 
   if (DB.ready()) {
     const { error } = await DB.upsertOnlyfansStats(payload);
-    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
   }
 
   app.toast('Stats OnlyFans guardadas!', 'success');

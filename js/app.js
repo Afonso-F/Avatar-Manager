@@ -223,6 +223,16 @@ const app = (() => {
     setTimeout(() => { if (navId === _navId) renderFn(content); }, 60);
   }
 
+  /* ── Formatar erro Supabase/JS para string legível ── */
+  function fmtErr(e) {
+    if (!e) return 'Erro desconhecido';
+    if (typeof e === 'string') return e;
+    const pick = v => (v && typeof v === 'string') ? v : null;
+    return pick(e.message) || pick(e.details) || pick(e.hint) || pick(e.code)
+      || (() => { try { const j = JSON.stringify(e); return j && j !== '{}' ? j : null; } catch { return null; } })()
+      || 'Erro desconhecido';
+  }
+
   /* ── Toast ── */
   function toast(message, type = 'info', duration = 3500) {
     const icons = { success: 'fa-circle-check', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
@@ -316,7 +326,7 @@ const app = (() => {
   }
 
   /* ── Public API ── */
-  return { init, navigate, toast, openModal, closeModal, formatDate, formatNumber, platformIcon, platformLabel, statusBadge, setAvatares, getAvatares, getActiveAvatar, initSupabase, getFeature, openChangelogModal, authLogin, authLogout };
+  return { init, navigate, toast, fmtErr, openModal, closeModal, formatDate, formatNumber, platformIcon, platformLabel, statusBadge, setAvatares, getAvatares, getActiveAvatar, initSupabase, getFeature, openChangelogModal, authLogin, authLogout };
 })();
 
 document.addEventListener('DOMContentLoaded', () => app.init());

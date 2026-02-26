@@ -1090,7 +1090,7 @@ async function saveDespesa(id) {
 
   if (DB.ready()) {
     const { data: saved, error } = await DB.upsertDespesa(despesa);
-    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
     if (id) {
       _despesasCache = _despesasCache.map(d => String(d.id) === String(id) ? { ...d, ...despesa } : d);
     } else {

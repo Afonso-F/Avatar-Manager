@@ -363,7 +363,7 @@ async function saveEditedPost(id) {
 
   if (DB.ready()) {
     const { error } = await DB.upsertPost(updated);
-    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
   }
 
   const idx = (_filaState.allPosts || []).findIndex(p => String(p.id) === String(id));

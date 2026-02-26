@@ -248,7 +248,7 @@ async function saveMusico(id) {
 
   if (DB.ready()) {
     const { error } = await DB.upsertMusico(payload);
-    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
   }
 
   app.toast(id ? 'Artista atualizado!' : 'Artista criado!', 'success');

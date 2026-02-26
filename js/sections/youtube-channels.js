@@ -533,7 +533,7 @@ async function saveYoutubeChannel(id) {
 
   if (DB.ready()) {
     const { data: saved, error } = await DB.upsertYoutubeChannel(payload);
-    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
 
     const savedId = saved?.id || id;
     const storagePrefix = savedId || String(Date.now());
