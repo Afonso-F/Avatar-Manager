@@ -209,7 +209,7 @@ async function testMistral() {
   const el = document.getElementById('mistral-test-result');
   el.textContent = 'A testar…';
   try {
-    const text = await Gemini.generateText('Responde com "OK" apenas.', { maxTokens: 10 });
+    const text = await AI.generateText('Responde com "OK" apenas.', { maxTokens: 10 });
     el.innerHTML = '<span style="color:var(--green)"><i class="fa-solid fa-circle-check"></i> Ligado!</span>';
     app.toast('Mistral OK!', 'success');
   } catch (e) {

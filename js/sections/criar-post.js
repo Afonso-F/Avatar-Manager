@@ -385,7 +385,7 @@ async function generatePlatformCaptions() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div>'; }
 
   try {
-    const captions = await Gemini.generateCaptionsPerPlatform(avatar, topic);
+    const captions = await AI.generateCaptionsPerPlatform(avatar, topic);
     _criarState.platformCaptions = captions;
 
     const box = document.getElementById('cp-platform-captions');
@@ -436,7 +436,7 @@ async function suggestHashtagsFromImage() {
   const avatar = app.getActiveAvatar();
   const nicho  = avatar?.nicho || 'geral';
   try {
-    const tags = await Gemini.suggestHashtagsFromImage(_criarState.imageDataUrl, nicho);
+    const tags = await AI.suggestHashtagsFromImage(_criarState.imageDataUrl, nicho);
     document.getElementById('cp-hashtags').value = tags;
     app.toast('Hashtags sugeridas pela imagem!', 'success');
   } catch (e) {
@@ -519,7 +519,7 @@ async function generateCaption() {
   try {
     const refUrls   = (avatar.imagens_referencia || []).slice(0, 2);
     const refImages = await _loadImagesAsDataUrls(refUrls);
-    const text = await Gemini.generateCaption(avatar, topic, refImages);
+    const text = await AI.generateCaption(avatar, topic, refImages);
     document.getElementById('cp-caption').value = text;
     document.getElementById('cp-preview-caption').textContent = text;
     document.getElementById('cp-caption-count').textContent = `${text.length} caracteres`;
@@ -551,7 +551,7 @@ async function generateHashtags() {
   const avatar = app.getActiveAvatar();
   const nicho  = avatar?.nicho || 'geral';
   try {
-    const text = await Gemini.generateHashtags(nicho, topic);
+    const text = await AI.generateHashtags(nicho, topic);
     document.getElementById('cp-hashtags').value = text;
     app.toast('Hashtags geradas!', 'success');
   } catch (e) {
@@ -563,7 +563,7 @@ async function generateVidPrompt() {
   const topic  = document.getElementById('cp-topic').value.trim() || 'lifestyle';
   const avatar = app.getActiveAvatar();
   try {
-    const text = await Gemini.generateVideoPrompt(avatar, topic);
+    const text = await AI.generateVideoPrompt(avatar, topic);
     document.getElementById('cp-vid-prompt').value = text;
     app.toast('Prompt de vídeo gerado!', 'success');
   } catch (e) {
@@ -575,7 +575,7 @@ async function generateImgPrompt() {
   const topic  = document.getElementById('cp-topic').value.trim() || 'lifestyle';
   const avatar = app.getActiveAvatar();
   try {
-    const text = await Gemini.generateImagePrompt(avatar, topic);
+    const text = await AI.generateImagePrompt(avatar, topic);
     document.getElementById('cp-img-prompt').value = text;
   } catch (e) {
     console.warn('Img prompt error:', e);
@@ -591,7 +591,7 @@ async function generateImage() {
   btn.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div> A gerar…';
   status.textContent = 'A gerar imagem com Imagen…';
   try {
-    const dataUrl = await Gemini.generateImage(prompt);
+    const dataUrl = await AI.generateImage(prompt);
     _criarState.imageDataUrl = dataUrl;
     setPreviewImage(dataUrl);
     // Mostrar botão de hashtags pela imagem
@@ -644,7 +644,7 @@ async function generateVideoPost() {
   }, 800);
 
   try {
-    const result = await Gemini.generateVideo(prompt, {
+    const result = await AI.generateVideo(prompt, {
       aspectRatio,
       onProgress: (step, total) => {
         const pct = Math.round((step / total) * 100);

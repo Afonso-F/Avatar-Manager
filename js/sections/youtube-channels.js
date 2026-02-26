@@ -346,7 +346,7 @@ Responde APENAS com JSON válido, sem markdown, sem backticks:
   "notas": "Descrição em português: tipo de conteúdo, audiência alvo, estilo de apresentação, periodicidade sugerida — 2-3 frases"
 }`;
 
-    const raw  = await Gemini.generateText(prompt, { temperature: 0.8 });
+    const raw  = await AI.generateText(prompt, { temperature: 0.8 });
     const m    = raw.match(/\{[\s\S]*\}/);
     const data = JSON.parse(m ? m[0] : raw);
 

@@ -154,7 +154,7 @@ Responde APENAS com JSON válido, sem markdown, sem backticks:
 }
 Interpreta e complementa criativamente o que faltar na descrição.`;
 
-    const raw  = await Gemini.generateText(prompt, { temperature: 0.85 });
+    const raw  = await AI.generateText(prompt, { temperature: 0.85 });
     const m    = raw.match(/\{[\s\S]*\}/);
     const data = JSON.parse(m ? m[0] : raw);
 
@@ -595,7 +595,7 @@ Responde APENAS com JSON válido, sem markdown, sem código, sem backticks:
 }
 Sê muito criativo, específico e coerente. O avatar deve ter uma identidade única e memorável.`;
 
-    const rawJson = await Gemini.generateText(jsonPrompt, { temperature: 0.95 });
+    const rawJson = await AI.generateText(jsonPrompt, { temperature: 0.95 });
 
     let data;
     try {
@@ -634,7 +634,7 @@ Sê muito criativo, específico e coerente. O avatar deve ter uma identidade ún
 
     const portraitPrompt = `Professional portrait photo, ${data.aparencia}, content creator for ${data.nicho}, soft diffused studio lighting, looking at camera, clean subtle gradient background, photorealistic, ultra high quality, 4K, sharp focus, Instagram-worthy headshot`;
 
-    const avatarDataUrl = await Gemini.generateImage(portraitPrompt, { aspectRatio: '1:1' });
+    const avatarDataUrl = await AI.generateImage(portraitPrompt, { aspectRatio: '1:1' });
     if (avatarDataUrl) {
       _refImagesState = [{ dataUrl: avatarDataUrl, isNew: true, _isPortrait: true }, ..._refImagesState.slice(0, 4)];
       _renderRefImages();
@@ -650,7 +650,7 @@ Sê muito criativo, específico e coerente. O avatar deve ter uma identidade ún
       if (_refImagesState.length >= 5) break;
       setProgress(`<i class="fa-solid fa-images"></i> A gerar imagem de referência ${i + 1}/2…`);
       try {
-        const refDataUrl = await Gemini.generateImage(refPrompts[i], { aspectRatio: '4:5' });
+        const refDataUrl = await AI.generateImage(refPrompts[i], { aspectRatio: '4:5' });
         if (refDataUrl) {
           _refImagesState.push({ dataUrl: refDataUrl, isNew: true });
           _renderRefImages();

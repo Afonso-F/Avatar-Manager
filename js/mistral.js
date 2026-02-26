@@ -1,9 +1,9 @@
 /* ============================================================
-   gemini.js — Mistral AI (texto + visão) + imagens grátis via
-               Pollinations.ai (fallback) ou fal.ai (opcional)
-               + vídeo via fal.ai (opcional)
+   mistral.js — Mistral AI (texto + visão via Pixtral)
+               + imagens via Pollinations.ai (grátis) ou fal.ai
+               + vídeo via fal.ai
    ============================================================ */
-const Gemini = (() => {
+const AI = (() => {
   const TEXT_MODEL   = 'mistral-small-latest';   // mais barato para texto
   const VISION_MODEL = 'pixtral-12b-2409';        // suporta imagens (visão)
   const BASE         = 'https://api.mistral.ai/v1';
