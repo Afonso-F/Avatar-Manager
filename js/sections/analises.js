@@ -80,6 +80,33 @@ async function renderAnalises(container) {
           <div id="an-top-posts"></div>
         </div>
       </div>
+
+      <div class="card mt-3">
+        <div class="card-header"><div class="card-title">Heatmap de publicações</div></div>
+        <div id="an-heatmap" style="padding:8px"></div>
+      </div>
+
+      <div class="grid-2 mt-3">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Comparação entre avatares</div></div>
+          <div id="an-comparison"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Alertas de performance</div></div>
+          <div id="an-alerts" style="padding:8px"></div>
+        </div>
+      </div>
+
+      <div class="grid-2 mt-3">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Projeção de crescimento (IA)</div></div>
+          <div id="an-projection"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Top hashtags por engagement</div></div>
+          <div id="an-hashtags"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Secção YouTube -->
@@ -194,6 +221,11 @@ async function loadAnalytics() {
   renderTimelineChart(data);
   renderBestTimes(data);
   renderTopPosts(data);
+  renderActivityHeatmap(data);
+  renderAvatarComparison(data, app.getAvatares());
+  renderPerformanceAlerts(data);
+  renderHashtagAnalytics(data);
+  renderGrowthProjection(data, avatarId);
 }
 
 function getDemoData() {
@@ -405,6 +437,116 @@ async function loadYoutubeAnalytics() {
         <span class="metric-value" style="color:var(--green)">€${parseFloat(c.receita_mes||0).toFixed(2)}</span>
       </div>`).join('') : '<div class="text-muted text-sm text-center" style="padding:16px">Sem dados</div>';
   }
+}
+
+/* ── Heatmap de Actividade ── */
+function renderActivityHeatmap(data) {
+  const el = document.getElementById('an-heatmap');
+  if (!el) return;
+  const now   = new Date();
+  const weeks = 12;
+  const days  = weeks * 7;
+  const counts = {};
+  data.forEach(d => {
+    if (d.publicado_em) {
+      const key = d.publicado_em.slice(0, 10);
+      counts[key] = (counts[key] || 0) + 1;
+    }
+  });
+  const max = Math.max(1, ...Object.values(counts));
+  let html = '<div style="display:flex;gap:3px;flex-wrap:wrap">';
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const key   = d.toISOString().slice(0, 10);
+    const count = counts[key] || 0;
+    const alpha = count ? 0.15 + 0.85 * (count / max) : 0;
+    const bg    = count ? `rgba(124,58,237,${alpha.toFixed(2)})` : 'var(--bg-elevated)';
+    html += `<div title="${key}: ${count} post(s)" style="width:12px;height:12px;border-radius:2px;background:${bg};cursor:default"></div>`;
+  }
+  html += '</div><div class="text-muted text-sm" style="margin-top:6px">Últimas ${weeks} semanas — cada quadrado = 1 dia</div>';
+  el.innerHTML = html;
+}
+
+/* ── Comparação entre avatares ── */
+function renderAvatarComparison(data, avatares) {
+  const el = document.getElementById('an-comparison');
+  if (!el) return;
+  const rows = avatares.map(a => {
+    const avData = data.filter(d => String(d.avatar_id) === String(a.id));
+    const likes  = avData.reduce((s, d) => s + (d.likes || 0), 0);
+    const views  = avData.reduce((s, d) => s + (d.visualizacoes || 0), 0);
+    const posts  = avData.length;
+    const eng    = posts ? ((likes / Math.max(views, 1)) * 100).toFixed(1) : '0';
+    return { a, likes, views, posts, eng };
+  }).sort((a, b) => b.likes - a.likes);
+
+  el.innerHTML = rows.map((r, i) => `
+    <div class="metric-row" style="padding:8px 0">
+      <span class="metric-label">
+        <span style="color:var(--accent);font-weight:800;min-width:20px">#${i+1}</span>
+        ${r.a.emoji || '🎭'} ${r.a.nome}
+      </span>
+      <span style="display:flex;gap:12px;font-size:.8rem">
+        <span style="color:var(--pink)"><i class="fa-solid fa-heart"></i> ${app.formatNumber(r.likes)}</span>
+        <span style="color:var(--accent)"><i class="fa-solid fa-eye"></i> ${app.formatNumber(r.views)}</span>
+        <span style="color:var(--green)"><i class="fa-solid fa-chart-line"></i> ${r.eng}%</span>
+        <span style="color:var(--text-muted)">${r.posts} posts</span>
+      </span>
+    </div>`).join('');
+}
+
+/* ── Alertas de queda ── */
+function renderPerformanceAlerts(data) {
+  const el = document.getElementById('an-alerts');
+  if (!el) return;
+  const now     = new Date();
+  const recent  = data.filter(d => d.publicado_em && (now - new Date(d.publicado_em)) < 7 * 86400000);
+  const older   = data.filter(d => d.publicado_em && (now - new Date(d.publicado_em)) >= 7 * 86400000 && (now - new Date(d.publicado_em)) < 14 * 86400000);
+  const recentL = recent.reduce((s, d) => s + (d.likes || 0), 0) / Math.max(recent.length, 1);
+  const olderL  = older.reduce((s, d) => s + (d.likes || 0), 0) / Math.max(older.length, 1);
+  const delta   = olderL ? ((recentL - olderL) / olderL * 100) : 0;
+  const alerts  = [];
+  if (delta < -20) alerts.push({ type: 'error', msg: `Queda de ${Math.abs(delta).toFixed(0)}% nos likes esta semana vs semana anterior` });
+  if (recent.length < 3) alerts.push({ type: 'warning', msg: 'Poucos posts publicados nos últimos 7 dias' });
+  if (delta > 20) alerts.push({ type: 'success', msg: `Aumento de ${delta.toFixed(0)}% nos likes esta semana!` });
+  if (!alerts.length) alerts.push({ type: 'success', msg: 'Performance estável — sem alertas' });
+  el.innerHTML = alerts.map(a => `
+    <div class="alert-item alert-${a.type}" style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:6px;margin-bottom:8px;background:var(--${a.type === 'error' ? 'red' : a.type === 'warning' ? 'yellow' : 'green'}-soft)">
+      <i class="fa-solid fa-${a.type === 'error' ? 'circle-xmark' : a.type === 'warning' ? 'triangle-exclamation' : 'circle-check'}" style="color:var(--${a.type === 'error' ? 'red' : a.type === 'warning' ? 'yellow' : 'green'})"></i>
+      <span class="text-sm">${a.msg}</span>
+    </div>`).join('');
+}
+
+/* ── Projeção de crescimento ── */
+async function renderGrowthProjection(data, avatarId) {
+  const el = document.getElementById('an-projection');
+  if (!el) return;
+  const avatares = app.getAvatares();
+  const avatar   = avatarId ? avatares.find(a => String(a.id) === String(avatarId)) : avatares[0];
+  if (!avatar || !data.length) { el.innerHTML = '<div class="text-muted text-sm text-center" style="padding:16px">Seleciona um avatar para ver a projeção</div>'; return; }
+  el.innerHTML = '<div class="spinner" style="margin:16px auto;width:20px;height:20px"></div>';
+  const stats = {
+    posts_publicados: data.length,
+    likes_media: Math.round(data.reduce((s,d) => s+(d.likes||0), 0) / Math.max(data.length,1)),
+    views_media: Math.round(data.reduce((s,d) => s+(d.visualizacoes||0), 0) / Math.max(data.length,1)),
+  };
+  const projection = await generateGrowthProjection(avatar, stats);
+  el.innerHTML = `<pre style="font-family:inherit;font-size:.82rem;white-space:pre-wrap;color:var(--text-secondary)">${projection}</pre>`;
+}
+
+/* ── Hashtag Analytics ── */
+function renderHashtagAnalytics(data) {
+  const el = document.getElementById('an-hashtags');
+  if (!el) return;
+  if (!data.length) { el.innerHTML = '<div class="text-muted text-sm text-center" style="padding:16px">Sem dados de hashtags</div>'; return; }
+  const result = analyzeHashtagPerformance(data);
+  if (!result || !result.top) { el.innerHTML = '<div class="text-muted text-sm text-center" style="padding:16px">Dados insuficientes</div>'; return; }
+  el.innerHTML = result.top.slice(0, 10).map((h, i) => `
+    <div class="metric-row">
+      <span class="metric-label"><span style="color:var(--accent);font-weight:800">#${i+1}</span> <code style="color:var(--accent)">${h.tag}</code></span>
+      <span class="metric-value" style="color:var(--pink)">${app.formatNumber(h.avg_likes)} likes/post</span>
+    </div>`).join('');
 }
 
 /* ── Música Analytics ── */

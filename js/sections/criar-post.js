@@ -74,12 +74,18 @@ async function renderCriarPost(container) {
           <div class="form-group mb-1">
             <input id="cp-topic" class="form-control" placeholder="Ex: 5 dicas para dormir melhor…">
           </div>
-          <div class="flex gap-1">
+          <div class="flex gap-1 flex-wrap">
             <button class="btn btn-secondary btn-sm flex-1" onclick="generateAll()">
               <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar tudo com IA
             </button>
             <button class="btn btn-ghost btn-sm" onclick="generatePlatformCaptions()" title="Gerar legenda específica por plataforma">
               <i class="fa-solid fa-layer-group"></i> Por plataforma
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="openABVariants()" title="Gerar variantes A/B/C">
+              <i class="fa-solid fa-code-branch"></i> A/B
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="openBatchGenerate()" title="Gerar múltiplos posts em lote">
+              <i class="fa-solid fa-layer-group"></i> Lote
             </button>
           </div>
         </div>
@@ -88,7 +94,12 @@ async function renderCriarPost(container) {
         <div class="card">
           <div class="card-header">
             <div class="card-title">Legenda</div>
-            <button class="btn btn-sm btn-ghost" onclick="generateCaption()"><i class="fa-solid fa-rotate"></i> Gerar</button>
+            <div class="flex gap-1">
+              <button class="btn btn-sm btn-ghost" onclick="generateCaption()"><i class="fa-solid fa-rotate"></i> Gerar</button>
+              <button class="btn btn-sm btn-ghost" onclick="openToneAdjuster()" title="Ajustar tom"><i class="fa-solid fa-sliders"></i> Tom</button>
+              <button class="btn btn-sm btn-ghost" onclick="openTranslateCaption()" title="Traduzir"><i class="fa-solid fa-language"></i></button>
+              <button class="btn btn-sm btn-ghost" onclick="openRewriteForPlatform()" title="Adaptar para plataforma"><i class="fa-solid fa-arrows-rotate"></i></button>
+            </div>
           </div>
           <textarea id="cp-caption" class="form-control mt-0" rows="5" placeholder="A legenda do post aparece aqui…"></textarea>
           <div id="cp-caption-count" class="text-sm text-muted mt-1">0 caracteres</div>
@@ -220,6 +231,7 @@ async function renderCriarPost(container) {
                   <i class="fa-solid fa-images"></i>
                 </button>
                 <button class="btn btn-sm btn-ghost" onclick="generateVidPrompt()"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar prompt</button>
+                <button class="btn btn-sm btn-ghost" onclick="openVideoScript()" title="Gerar guião de vídeo"><i class="fa-solid fa-scroll"></i> Guião</button>
               </div>
             </div>
             <div class="video-preview-box" id="cp-vid-preview">
@@ -788,4 +800,298 @@ function togglePlatformModal(el) {
   const wasActive = el.classList.contains('active');
   el.classList.toggle('active', !wasActive);
   if (!wasActive) el.classList.add(p); else el.classList.remove(p);
+}
+
+/* ── Variantes A/B ── */
+async function openABVariants() {
+  const topic  = document.getElementById('cp-topic')?.value.trim();
+  if (!topic) { app.toast('Escreve o tema do post primeiro', 'warning'); return; }
+  const avatar = app.getActiveAvatar();
+  if (!avatar) { app.toast('Seleciona um avatar', 'warning'); return; }
+
+  app.openModal('A gerar variantes…', '<div class="loading-overlay" style="padding:40px"><div class="spinner"></div></div>', '');
+  try {
+    const variantes = await AI.generateVariants(avatar, topic, 3);
+    const body = `
+      <div style="display:flex;flex-direction:column;gap:12px">
+        ${variantes.map((v, i) => `
+          <div style="background:var(--bg-elevated);border-radius:var(--radius);padding:14px;border:1px solid var(--border)">
+            <div style="font-size:.75rem;color:var(--accent);font-weight:700;margin-bottom:6px;text-transform:uppercase">
+              ${String.fromCharCode(65 + i)} — ${v.estilo || 'Variante ' + (i+1)}
+            </div>
+            <div style="font-size:.88rem;line-height:1.6;margin-bottom:8px">${v.legenda}</div>
+            <div style="font-size:.75rem;color:var(--text-muted)">${v.hashtags || ''}</div>
+            <button class="btn btn-sm btn-primary mt-2" onclick="applyVariant(${i})">
+              <i class="fa-solid fa-arrow-up"></i> Usar esta
+            </button>
+          </div>`).join('')}
+      </div>`;
+    window._abVariants = variantes;
+    app.openModal('Variantes A/B/C', body, '<button class="btn btn-secondary" onclick="app.closeModal()">Fechar</button>');
+  } catch (e) {
+    app.toast('Erro: ' + e.message, 'error');
+    app.closeModal();
+  }
+}
+
+function applyVariant(idx) {
+  const v = (window._abVariants || [])[idx];
+  if (!v) return;
+  const legEl = document.getElementById('cp-caption');
+  const hashEl = document.getElementById('cp-hashtags');
+  if (legEl) {
+    legEl.value = v.legenda;
+    document.getElementById('cp-preview-caption').textContent = v.legenda;
+    document.getElementById('cp-caption-count').textContent = `${v.legenda.length} caracteres`;
+  }
+  if (hashEl && v.hashtags) hashEl.value = v.hashtags;
+  app.closeModal();
+  app.toast('Variante aplicada!', 'success');
+}
+
+/* ── Geração em lote ── */
+function openBatchGenerate() {
+  const topic = document.getElementById('cp-topic')?.value.trim();
+  const body = `
+    <div class="form-group">
+      <label class="form-label">Tema dos posts</label>
+      <input id="batch-topic" class="form-control" value="${topic || ''}" placeholder="Ex: dicas de produtividade">
+    </div>
+    <div class="form-group mb-0">
+      <label class="form-label">Número de posts</label>
+      <select id="batch-count" class="form-control">
+        <option value="5">5 posts</option>
+        <option value="10" selected>10 posts</option>
+        <option value="15">15 posts</option>
+        <option value="20">20 posts</option>
+      </select>
+    </div>`;
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="runBatchGenerate()">
+      <i class="fa-solid fa-layer-group"></i> Gerar posts
+    </button>`;
+  app.openModal('Geração em lote', body, footer);
+}
+
+async function runBatchGenerate() {
+  const topic = document.getElementById('batch-topic')?.value.trim();
+  const count = parseInt(document.getElementById('batch-count')?.value) || 10;
+  const avatar = app.getActiveAvatar();
+  if (!topic) { app.toast('Escreve o tema', 'warning'); return; }
+  if (!avatar) { app.toast('Seleciona um avatar', 'warning'); return; }
+
+  const btn = document.querySelector('[onclick="runBatchGenerate()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div> A gerar…'; }
+
+  try {
+    const posts = await AI.generateBatchPosts(avatar, topic, count);
+    const schedule = document.getElementById('cp-schedule')?.value;
+    const platforms = getSelectedPlatforms();
+    const status = 'rascunho';
+
+    let saved = 0;
+    for (const p of posts) {
+      const postData = {
+        avatar_id: avatar.id,
+        legenda:   p.legenda,
+        hashtags:  p.hashtags || '',
+        plataformas: platforms,
+        status,
+        agendado_para: schedule ? new Date(schedule).toISOString() : null,
+        criado_em: new Date().toISOString(),
+      };
+      if (DB.ready()) {
+        const { error } = await DB.upsertPost(postData);
+        if (!error) saved++;
+      } else {
+        saved++;
+      }
+    }
+    app.closeModal();
+    app.toast(`${saved} posts criados como rascunho!`, 'success');
+    setTimeout(() => app.navigate('fila'), 800);
+  } catch (e) {
+    app.toast('Erro: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Gerar posts'; }
+  }
+}
+
+/* ── Ajustar tom ── */
+function openToneAdjuster() {
+  const caption = document.getElementById('cp-caption')?.value.trim();
+  if (!caption) { app.toast('Escreve uma legenda primeiro', 'warning'); return; }
+
+  const body = `
+    <div class="form-group mb-0">
+      <label class="form-label">Novo tom</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        ${[['formal','Formal'],['casual','Casual'],['humoristico','Humorístico'],['inspiracional','Inspiracional'],['emocional','Emotivo'],['educativo','Educativo'],['urgente','Urgente']].map(([k,l]) =>
+          `<button class="btn btn-secondary btn-sm" onclick="applyTone('${k}')">
+             <i class="fa-solid fa-pen"></i> ${l}
+           </button>`
+        ).join('')}
+      </div>
+    </div>`;
+  app.openModal('Ajustar tom', body, '<button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>');
+  window._toneCaption = caption;
+}
+
+async function applyTone(tone) {
+  const caption = window._toneCaption;
+  if (!caption) return;
+  app.openModal('A ajustar tom…', '<div class="loading-overlay" style="padding:40px"><div class="spinner"></div></div>', '');
+  try {
+    const newCaption = await AI.adjustTone(caption, tone);
+    const legEl = document.getElementById('cp-caption');
+    if (legEl) {
+      legEl.value = newCaption;
+      document.getElementById('cp-preview-caption').textContent = newCaption;
+      document.getElementById('cp-caption-count').textContent = `${newCaption.length} caracteres`;
+    }
+    app.closeModal();
+    app.toast('Tom ajustado!', 'success');
+  } catch (e) {
+    app.toast('Erro: ' + e.message, 'error');
+    app.closeModal();
+  }
+}
+
+/* ── Traduzir legenda ── */
+function openTranslateCaption() {
+  const caption = document.getElementById('cp-caption')?.value.trim();
+  if (!caption) { app.toast('Escreve uma legenda primeiro', 'warning'); return; }
+
+  const langs = [['en','Inglês'],['es','Espanhol'],['fr','Francês'],['de','Alemão'],['it','Italiano'],['br','Português BR'],['nl','Neerlandês']];
+  const body = `
+    <div class="form-group mb-0">
+      <label class="form-label">Traduzir para</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        ${langs.map(([code, label]) =>
+          `<button class="btn btn-secondary btn-sm" onclick="applyTranslation('${code}')">
+             <i class="fa-solid fa-language"></i> ${label}
+           </button>`
+        ).join('')}
+      </div>
+    </div>`;
+  app.openModal('Traduzir legenda', body, '<button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>');
+  window._translateCaption = caption;
+}
+
+async function applyTranslation(langCode) {
+  const caption = window._translateCaption;
+  if (!caption) return;
+  app.openModal('A traduzir…', '<div class="loading-overlay" style="padding:40px"><div class="spinner"></div></div>', '');
+  try {
+    const translated = await AI.translateCaption(caption, langCode);
+    const legEl = document.getElementById('cp-caption');
+    if (legEl) {
+      legEl.value = translated;
+      document.getElementById('cp-preview-caption').textContent = translated;
+      document.getElementById('cp-caption-count').textContent = `${translated.length} caracteres`;
+    }
+    app.closeModal();
+    app.toast('Tradução aplicada!', 'success');
+  } catch (e) {
+    app.toast('Erro: ' + e.message, 'error');
+    app.closeModal();
+  }
+}
+
+/* ── Adaptar para plataforma ── */
+function openRewriteForPlatform() {
+  const caption = document.getElementById('cp-caption')?.value.trim();
+  if (!caption) { app.toast('Escreve uma legenda primeiro', 'warning'); return; }
+
+  const platforms = ['instagram','tiktok','youtube','facebook','linkedin','pinterest','twitter','threads','bluesky'];
+  const body = `
+    <div class="form-group mb-0">
+      <label class="form-label">Adaptar para</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+        ${platforms.map(p =>
+          `<button class="btn btn-secondary btn-sm" onclick="applyRewrite('${p}')">
+             ${app.platformIcon(p)} ${p.charAt(0).toUpperCase()+p.slice(1)}
+           </button>`
+        ).join('')}
+      </div>
+    </div>`;
+  app.openModal('Adaptar para plataforma', body, '<button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>');
+  window._rewriteCaption = caption;
+}
+
+async function applyRewrite(platform) {
+  const caption = window._rewriteCaption;
+  if (!caption) return;
+  app.openModal('A adaptar…', '<div class="loading-overlay" style="padding:40px"><div class="spinner"></div></div>', '');
+  try {
+    const rewritten = await AI.rewriteForPlatform(caption, platform);
+    const legEl = document.getElementById('cp-caption');
+    if (legEl) {
+      legEl.value = rewritten;
+      document.getElementById('cp-preview-caption').textContent = rewritten;
+      document.getElementById('cp-caption-count').textContent = `${rewritten.length} caracteres`;
+    }
+    app.closeModal();
+    app.toast(`Adaptado para ${platform}!`, 'success');
+  } catch (e) {
+    app.toast('Erro: ' + e.message, 'error');
+    app.closeModal();
+  }
+}
+
+/* ── Guião de vídeo ── */
+async function openVideoScript() {
+  const topic  = document.getElementById('cp-topic')?.value.trim();
+  if (!topic) { app.toast('Escreve o tema do post primeiro', 'warning'); return; }
+  const avatar = app.getActiveAvatar();
+
+  app.openModal('A gerar guião…', '<div class="loading-overlay" style="padding:40px"><div class="spinner"></div></div>', '');
+  try {
+    const script = await AI.generateVideoScript(avatar, topic);
+    const body = `
+      <div style="display:flex;flex-direction:column;gap:12px;font-size:.88rem">
+        <div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:12px">
+          <div style="color:var(--accent);font-weight:700;font-size:.75rem;text-transform:uppercase;margin-bottom:4px">GANCHO (0-5s)</div>
+          <div style="line-height:1.6">${script.gancho || '—'}</div>
+        </div>
+        <div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:12px">
+          <div style="color:var(--blue);font-weight:700;font-size:.75rem;text-transform:uppercase;margin-bottom:4px">CONTEXTO (5-20s)</div>
+          <div style="line-height:1.6">${script.contexto || '—'}</div>
+        </div>
+        <div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:12px">
+          <div style="color:var(--green);font-weight:700;font-size:.75rem;text-transform:uppercase;margin-bottom:4px">CONTEÚDO PRINCIPAL</div>
+          <ul style="margin:0;padding-left:16px;line-height:1.8">
+            ${(script.pontos || []).map(p => `<li>${p}</li>`).join('')}
+          </ul>
+        </div>
+        <div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:12px">
+          <div style="color:var(--pink);font-weight:700;font-size:.75rem;text-transform:uppercase;margin-bottom:4px">CALL-TO-ACTION</div>
+          <div style="line-height:1.6">${script.cta || '—'}</div>
+        </div>
+        ${script.notas_producao ? `
+        <div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:12px">
+          <div style="color:var(--text-muted);font-weight:700;font-size:.75rem;text-transform:uppercase;margin-bottom:4px">NOTAS DE PRODUÇÃO</div>
+          <div style="line-height:1.6;color:var(--text-muted)">${script.notas_producao}</div>
+        </div>` : ''}
+      </div>`;
+    app.openModal('Guião de Vídeo', body, `
+      <button class="btn btn-secondary" onclick="app.closeModal()">Fechar</button>
+      <button class="btn btn-primary" onclick="applyScriptToPrompt(${JSON.stringify(script).replace(/"/g,'&quot;')})">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Usar no prompt
+      </button>`);
+  } catch (e) {
+    app.toast('Erro: ' + e.message, 'error');
+    app.closeModal();
+  }
+}
+
+function applyScriptToPrompt(script) {
+  const promptEl = document.getElementById('cp-vid-prompt');
+  if (promptEl && script) {
+    const text = [script.gancho, script.contexto, ...(script.pontos || []), script.cta].filter(Boolean).join(' — ');
+    promptEl.value = text;
+    app.toast('Guião aplicado ao prompt!', 'success');
+  }
+  app.closeModal();
 }

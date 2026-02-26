@@ -33,6 +33,9 @@ async function renderFila(container) {
         <button class="btn btn-secondary btn-icon" id="fila-view-btn" onclick="toggleFilaView()" title="Mudar vista">
           <i class="fa-solid fa-${_filaState.view === 'lista' ? 'columns' : 'list'}"></i>
         </button>
+        <button class="btn btn-secondary btn-icon" onclick="openCalendarView()" title="Calendário">
+          <i class="fa-solid fa-calendar-days"></i>
+        </button>
         <button class="btn btn-secondary" onclick="exportFilaCsv()">
           <i class="fa-solid fa-file-csv"></i> Exportar CSV
         </button>
@@ -182,6 +185,9 @@ function renderFilaKanban() {
 function renderPostCard(p, avatares) {
   const av       = avatares.find(a => String(a.id) === String(p.avatar_id));
   const platforms = (p.plataformas || []).map(pl => app.platformIcon(pl)).join(' ');
+  const aprovBadge = p.aprovacao_status && p.aprovacao_status !== 'pendente'
+    ? `<span class="badge ${p.aprovacao_status === 'aprovado' ? 'badge-green' : 'badge-red'}" style="font-size:.65rem">${p.aprovacao_status}</span>` : '';
+  const recBadge = p.repetir ? `<span class="badge badge-muted" style="font-size:.65rem"><i class="fa-solid fa-rotate"></i> ${p.repetir_frequencia||'recorrente'}</span>` : '';
   return `
     <div class="post-card" draggable="true" data-post-id="${p.id}">
       <div class="post-drag-handle" title="Arrastar para reordenar"><i class="fa-solid fa-grip-vertical"></i></div>
@@ -192,13 +198,19 @@ function renderPostCard(p, avatares) {
         <div class="post-caption">${p.legenda || '(sem legenda)'}</div>
         <div class="post-meta">
           ${app.statusBadge(p.status)}
+          ${aprovBadge}
+          ${recBadge}
           ${av ? `<span class="text-sm text-muted">${av.emoji || '🎭'} ${av.nome}</span>` : ''}
           <span class="post-time"><i class="fa-regular fa-clock"></i> ${app.formatDate(p.agendado_para)}</span>
           <span class="text-sm text-muted">${platforms}</span>
         </div>
+        ${renderTagBadges(p.tags)}
       </div>
       <div class="post-actions flex-col gap-1">
         <button class="btn btn-sm btn-secondary btn-icon" onclick="editPost('${p.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openPostComments('${p.id}')" title="Comentários"><i class="fa-solid fa-comment"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openApprovalWorkflow('${p.id}')" title="Aprovação"><i class="fa-solid fa-clipboard-check"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="toggleRecurring('${p.id}')" title="Recorrência"><i class="fa-solid fa-rotate"></i></button>
         <button class="btn btn-sm btn-danger btn-icon"    onclick="deleteFilaPost('${p.id}')" title="Apagar"><i class="fa-solid fa-trash"></i></button>
       </div>
     </div>`;
@@ -552,6 +564,232 @@ function checkScheduledNotifications() {
     });
     notified[post.id] = true;
     localStorage.setItem('as_notified_posts', JSON.stringify(notified));
+  }
+}
+
+/* ── Tags ── */
+function renderTagBadges(tags) {
+  if (!tags || !tags.length) return '';
+  return tags.map(t => `<span class="tag-badge">${t}</span>`).join('');
+}
+
+/* ── Recorrência ── */
+async function toggleRecurring(id) {
+  const post = (_filaState.allPosts || []).find(p => String(p.id) === String(id));
+  if (!post) return;
+  const body = `
+    <div class="form-group">
+      <label class="form-label">Ativar recorrência</label>
+      <select class="form-control" id="rec-freq">
+        <option value="">Sem recorrência</option>
+        <option value="diario" ${post.repetir_frequencia === 'diario' ? 'selected' : ''}>Diário</option>
+        <option value="semanal" ${post.repetir_frequencia === 'semanal' ? 'selected' : ''}>Semanal</option>
+        <option value="quinzenal" ${post.repetir_frequencia === 'quinzenal' ? 'selected' : ''}>Quinzenal</option>
+        <option value="mensal" ${post.repetir_frequencia === 'mensal' ? 'selected' : ''}>Mensal</option>
+      </select>
+    </div>
+    <div class="form-group mb-0">
+      <label class="form-label">Próxima publicação</label>
+      <input id="rec-proxima" type="datetime-local" class="form-control" value="${post.repetir_proxima ? new Date(post.repetir_proxima).toISOString().slice(0,16) : ''}">
+    </div>`;
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveRecurring('${id}')"><i class="fa-solid fa-rotate"></i> Guardar</button>`;
+  app.openModal('Recorrência do post', body, footer);
+}
+
+async function saveRecurring(id) {
+  const freq    = document.getElementById('rec-freq').value;
+  const proxima = document.getElementById('rec-proxima').value;
+  const update  = {
+    id,
+    repetir:           !!freq,
+    repetir_frequencia: freq || null,
+    repetir_proxima:   proxima ? new Date(proxima).toISOString() : null,
+  };
+  if (DB.ready()) {
+    const { error } = await DB.upsertPost(update);
+    if (error) { app.toast('Erro: ' + app.fmtErr(error), 'error'); return; }
+  }
+  const idx = (_filaState.allPosts || []).findIndex(p => String(p.id) === String(id));
+  if (idx >= 0) Object.assign(_filaState.allPosts[idx], update);
+  app.toast(freq ? 'Recorrência configurada!' : 'Recorrência removida', 'success');
+  app.closeModal();
+  renderFilaList();
+}
+
+/* ── Aprovação ── */
+async function openApprovalWorkflow(id) {
+  const post = (_filaState.allPosts || []).find(p => String(p.id) === String(id));
+  if (!post) return;
+  const cur = post.aprovacao_status || 'pendente';
+  const body = `
+    <div class="form-group">
+      <label class="form-label">Estado de aprovação</label>
+      <div class="flex gap-2" style="flex-wrap:wrap">
+        ${['pendente','aprovado','rejeitado'].map(s => `
+          <button class="btn ${cur === s ? 'btn-primary' : 'btn-secondary'}" id="aprov-${s}" onclick="selectAprovacao('${s}')">
+            <i class="fa-solid ${s === 'aprovado' ? 'fa-check' : s === 'rejeitado' ? 'fa-xmark' : 'fa-clock'}"></i> ${s.charAt(0).toUpperCase()+s.slice(1)}
+          </button>`).join('')}
+      </div>
+    </div>
+    <div class="form-group mb-0">
+      <label class="form-label">Nota</label>
+      <textarea id="aprov-nota" class="form-control" rows="3" placeholder="Razão da aprovação ou rejeição…">${post.aprovacao_nota || ''}</textarea>
+    </div>`;
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveAprovacao('${id}')"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>`;
+  app.openModal('Aprovação do post', body, footer);
+  window._aprovacaoSelected = cur;
+}
+
+function selectAprovacao(status) {
+  window._aprovacaoSelected = status;
+  ['pendente','aprovado','rejeitado'].forEach(s => {
+    const btn = document.getElementById(`aprov-${s}`);
+    if (btn) { btn.className = `btn ${s === status ? 'btn-primary' : 'btn-secondary'}`; }
+  });
+}
+
+async function saveAprovacao(id) {
+  const status = window._aprovacaoSelected || 'pendente';
+  const nota   = document.getElementById('aprov-nota').value.trim();
+  const update  = { id, aprovacao_status: status, aprovacao_nota: nota };
+  if (DB.ready()) {
+    const { error } = await DB.upsertPost(update);
+    if (error) { app.toast('Erro: ' + app.fmtErr(error), 'error'); return; }
+  }
+  const idx = (_filaState.allPosts || []).findIndex(p => String(p.id) === String(id));
+  if (idx >= 0) Object.assign(_filaState.allPosts[idx], update);
+  app.toast('Aprovação guardada!', 'success');
+  app.closeModal();
+  renderFilaList();
+}
+
+/* ── Calendário editorial ── */
+function openCalendarView() {
+  const posts = _filaState.allPosts || [];
+  const now   = new Date();
+  let   year  = now.getFullYear();
+  let   month = now.getMonth();
+
+  function renderCal(y, m) {
+    const first    = new Date(y, m, 1);
+    const lastDay  = new Date(y, m + 1, 0).getDate();
+    const startWd  = (first.getDay() + 6) % 7; // Monday=0
+    const monthStr = first.toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
+
+    const days = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+    let grid = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:8px">
+      ${days.map(d => `<div style="text-align:center;font-size:.7rem;font-weight:600;color:var(--text-muted);padding:4px 0">${d}</div>`).join('')}
+    </div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">`;
+    for (let i = 0; i < startWd; i++) grid += '<div></div>';
+    for (let d = 1; d <= lastDay; d++) {
+      const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dayPosts = posts.filter(p => p.agendado_para && p.agendado_para.startsWith(dateStr));
+      const isToday  = y === now.getFullYear() && m === now.getMonth() && d === now.getDate();
+      grid += `<div style="min-height:60px;background:var(--bg-elevated);border-radius:6px;padding:4px;border:1px solid ${isToday ? 'var(--accent)' : 'var(--border)'}">
+        <div style="font-size:.75rem;font-weight:700;color:${isToday ? 'var(--accent)' : 'var(--text-muted)'};margin-bottom:2px">${d}</div>
+        ${dayPosts.slice(0,3).map(p => `<div title="${p.legenda||''}" style="font-size:.65rem;background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:1px 4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="app.closeModal();editPost('${p.id}')">${(p.legenda||'(sem legenda)').slice(0,18)}</div>`).join('')}
+        ${dayPosts.length > 3 ? `<div style="font-size:.65rem;color:var(--text-muted)">+${dayPosts.length-3}</div>` : ''}
+      </div>`;
+    }
+    grid += '</div>';
+
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <button class="btn btn-secondary btn-sm" onclick="(${renderCal.toString()})(${y},${m-1})">&#8249;</button>
+        <strong style="text-transform:capitalize">${monthStr}</strong>
+        <button class="btn btn-secondary btn-sm" onclick="(${renderCal.toString()})(${y},${m+1})">&#8250;</button>
+      </div>
+      ${grid}`;
+  }
+
+  const body = `<div id="cal-body">${renderCal(year, month)}</div>`;
+  app.openModal('Calendário editorial', body, `<button class="btn btn-primary" onclick="app.closeModal()">Fechar</button>`);
+  // Override renderCal closure to update modal body
+  window._renderCalendar = (y, m) => {
+    const el = document.getElementById('cal-body');
+    if (el) el.innerHTML = window._renderCalendar ? '' : '';
+  };
+}
+
+/* ── Comentários ── */
+async function openPostComments(postId) {
+  let comentarios = [];
+  if (DB.ready()) {
+    const { data } = await DB.getPostComentarios(postId);
+    comentarios = data || [];
+  }
+  function renderList(list) {
+    return list.length
+      ? list.map(c => `
+          <div style="background:var(--bg-elevated);border-radius:6px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="text-sm">${c.texto}</div>
+              <div class="text-sm text-muted" style="margin-top:4px">${app.formatDate(c.criado_em)}</div>
+            </div>
+            <button class="btn btn-sm btn-danger btn-icon" onclick="deleteComment('${c.id}','${postId}')"><i class="fa-solid fa-trash"></i></button>
+          </div>`).join('')
+      : '<div class="text-muted text-sm text-center" style="padding:16px">Sem comentários ainda</div>';
+  }
+
+  const body = `
+    <div id="comments-list">${renderList(comentarios)}</div>
+    <div class="form-group mb-0 mt-3">
+      <label class="form-label">Novo comentário / nota</label>
+      <div style="display:flex;gap:8px">
+        <input id="new-comment" class="form-control" placeholder="Escreve aqui…">
+        <button class="btn btn-primary" onclick="addComment('${postId}')"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>`;
+  app.openModal('Comentários internos', body, `<button class="btn btn-secondary" onclick="app.closeModal()">Fechar</button>`);
+}
+
+async function addComment(postId) {
+  const input = document.getElementById('new-comment');
+  const texto = input?.value.trim();
+  if (!texto) return;
+  let newCom = { texto, criado_em: new Date().toISOString() };
+  if (DB.ready()) {
+    const { data, error } = await DB.addPostComentario(postId, texto);
+    if (error) { app.toast('Erro: ' + app.fmtErr(error), 'error'); return; }
+    if (data?.[0]) newCom = data[0];
+  }
+  const list = document.getElementById('comments-list');
+  if (list) {
+    const div = document.createElement('div');
+    div.style.cssText = 'background:var(--bg-elevated);border-radius:6px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start';
+    div.innerHTML = `<div><div class="text-sm">${newCom.texto}</div><div class="text-sm text-muted" style="margin-top:4px">${app.formatDate(newCom.criado_em)}</div></div><button class="btn btn-sm btn-danger btn-icon" onclick="deleteComment('${newCom.id||''}','${postId}')"><i class="fa-solid fa-trash"></i></button>`;
+    list.appendChild(div);
+    const empty = list.querySelector('.text-muted');
+    if (empty && empty.textContent.includes('Sem comentários')) empty.remove();
+  }
+  if (input) input.value = '';
+}
+
+async function deleteComment(commentId, postId) {
+  if (!commentId) return;
+  if (DB.ready()) {
+    const { error } = await DB.deletePostComentario(commentId);
+    if (error) { app.toast('Erro: ' + app.fmtErr(error), 'error'); return; }
+  }
+  await openPostComments(postId);
+}
+
+/* ── Webhook ── */
+async function triggerWebhook(post, event = 'publicado') {
+  const url = localStorage.getItem('as_webhook_url');
+  if (!url) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, post_id: post.id, legenda: post.legenda, plataformas: post.plataformas, timestamp: new Date().toISOString() }),
+    });
+  } catch (e) {
+    console.warn('Webhook falhou:', e);
   }
 }
 

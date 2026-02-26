@@ -1087,3 +1087,56 @@ select.form-control { appearance: none; cursor: pointer; }
   justify-content: center;
   padding: 40px;
 }
+
+/* ============================================================
+   New Features — added 2026-02-26
+   ============================================================ */
+
+/* ── Light theme ── */
+[data-theme="light"] {
+  --bg-base:      #f4f4f8;
+  --bg-surface:   #ffffff;
+  --bg-elevated:  #eeeef4;
+  --bg-hover:     #e4e4ec;
+  --border:       #d0d0e0;
+  --border-light: #c0c0d4;
+  --text-primary:   #1a1a2e;
+  --text-secondary: #4a4a6a;
+  --text-muted:     #8888aa;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+[data-theme="light"] .sidebar { background: #ffffff; }
+[data-theme="light"] .topbar  { background: #ffffff; border-bottom-color: var(--border); }
+
+/* ── Tag badges ── */
+.tag-badge {
+  display: inline-block;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 20px;
+  padding: 1px 8px;
+  font-size: .7rem;
+  font-weight: 600;
+  margin: 2px 2px 0 0;
+}
+
+/* ── New platform icon colours ── */
+.icon-pinterest   { color: #e60023; }
+.icon-linkedin    { color: #0a66c2; }
+.icon-x           { color: #fff; }
+.icon-threads     { color: #fff; }
+.icon-bluesky     { color: #0085ff; }
+
+/* ── Fila approval badge ── */
+.badge-pending { background: var(--yellow-soft); color: var(--yellow); }
+
+/* ── Command palette animation ── */
+#cmdPaletteOverlay { transition: opacity .15s; }
+
+/* ── Onboarding wizard ── */
+.onboarding-dots { display: flex; gap: 6px; justify-content: center; margin-top: 16px; }
+.onboarding-dot  { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.onboarding-dot.active { background: var(--accent); }
+
+/* ── Activity heatmap ── */
+#an-heatmap > div { flex-wrap: wrap; }

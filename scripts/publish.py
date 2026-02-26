@@ -24,6 +24,16 @@ INSTAGRAM_TOKEN = os.environ.get('INSTAGRAM_TOKEN', '')
 TIKTOK_TOKEN    = os.environ.get('TIKTOK_TOKEN', '')
 FACEBOOK_TOKEN  = os.environ.get('FACEBOOK_TOKEN', '')
 YOUTUBE_TOKEN   = os.environ.get('YOUTUBE_TOKEN', '')
+PINTEREST_TOKEN = os.environ.get('PINTEREST_TOKEN', '')
+LINKEDIN_TOKEN  = os.environ.get('LINKEDIN_TOKEN', '')
+X_BEARER_TOKEN  = os.environ.get('X_BEARER_TOKEN', '')
+X_API_KEY       = os.environ.get('X_API_KEY', '')
+X_API_SECRET    = os.environ.get('X_API_SECRET', '')
+X_ACCESS_TOKEN  = os.environ.get('X_ACCESS_TOKEN', '')
+X_ACCESS_SECRET = os.environ.get('X_ACCESS_SECRET', '')
+THREADS_TOKEN   = os.environ.get('THREADS_TOKEN', '')
+BLUESKY_HANDLE  = os.environ.get('BLUESKY_HANDLE', '')
+BLUESKY_PASSWORD= os.environ.get('BLUESKY_PASSWORD', '')
 DRY_RUN         = os.environ.get('DRY_RUN', 'false').lower() == 'true'
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -313,11 +323,244 @@ def publish_youtube(post: dict) -> bool:
     return True
 
 
+def publish_pinterest(post: dict) -> bool:
+    """Pinterest API v5 — cria um Pin."""
+    if not PINTEREST_TOKEN:
+        log.warning("Pinterest token não configurado — a saltar")
+        return False
+
+    caption  = post.get('legenda', '')
+    hashtags = post.get('hashtags', '')
+    title    = caption[:100] or 'Novo pin'
+    note     = f"{caption}\n\n{hashtags}".strip()
+    img_url  = post.get('imagem_url')
+
+    if not img_url:
+        log.warning("Pinterest: post sem imagem — a saltar")
+        return False
+
+    headers = {
+        'Authorization': f'Bearer {PINTEREST_TOKEN}',
+        'Content-Type':  'application/json',
+    }
+    payload = {
+        'title':      title,
+        'description': note,
+        'media_source': {
+            'source_type': 'image_url',
+            'url':          img_url,
+        },
+    }
+    r = requests.post('https://api.pinterest.com/v5/pins', headers=headers, json=payload, timeout=30)
+    if not r.ok:
+        log.error(f"Pinterest: {r.status_code} {r.text}")
+        return False
+
+    pin_id = r.json().get('id')
+    log.info(f"Pinterest publicado: {pin_id}")
+    save_published(post, 'pinterest', social_id=pin_id)
+    return True
+
+
+def publish_linkedin(post: dict) -> bool:
+    """LinkedIn UGC Posts API."""
+    if not LINKEDIN_TOKEN:
+        log.warning("LinkedIn token não configurado — a saltar")
+        return False
+
+    caption  = post.get('legenda', '')
+    hashtags = post.get('hashtags', '')
+    text     = f"{caption}\n\n{hashtags}".strip()
+    img_url  = post.get('imagem_url')
+
+    headers = {
+        'Authorization': f'Bearer {LINKEDIN_TOKEN}',
+        'Content-Type':  'application/json',
+        'X-Restli-Protocol-Version': '2.0.0',
+    }
+
+    # Get person URN
+    me_r = requests.get('https://api.linkedin.com/v2/me', headers=headers, timeout=15)
+    if not me_r.ok:
+        log.error(f"LinkedIn /me: {me_r.status_code} {me_r.text}")
+        return False
+    person_urn = f"urn:li:person:{me_r.json().get('id')}"
+
+    media_content = []
+    if img_url:
+        media_content = [{
+            'status':      'READY',
+            'description': {'text': caption[:200]},
+            'media':       img_url,
+            'title':       {'text': caption[:100]},
+        }]
+
+    payload = {
+        'author':         person_urn,
+        'lifecycleState': 'PUBLISHED',
+        'specificContent': {
+            'com.linkedin.ugc.ShareContent': {
+                'shareCommentary': {'text': text},
+                'shareMediaCategory': 'IMAGE' if img_url else 'NONE',
+                'media': media_content,
+            }
+        },
+        'visibility': {'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'},
+    }
+    r = requests.post('https://api.linkedin.com/v2/ugcPosts', headers=headers, json=payload, timeout=30)
+    if not r.ok:
+        log.error(f"LinkedIn: {r.status_code} {r.text}")
+        return False
+
+    post_id = r.headers.get('x-restli-id') or r.json().get('id', '')
+    log.info(f"LinkedIn publicado: {post_id}")
+    save_published(post, 'linkedin', social_id=post_id)
+    return True
+
+
+def publish_x(post: dict) -> bool:
+    """X (Twitter) API v2 — cria um tweet."""
+    if not (X_API_KEY and X_API_SECRET and X_ACCESS_TOKEN and X_ACCESS_SECRET):
+        log.warning("X (Twitter) tokens não configurados — a saltar")
+        return False
+
+    try:
+        import tweepy  # type: ignore
+    except ImportError:
+        log.warning("tweepy não instalado — a saltar publicação em X")
+        return False
+
+    caption  = post.get('legenda', '')
+    hashtags = post.get('hashtags', '')
+    text     = f"{caption}\n\n{hashtags}".strip()[:280]
+
+    client = tweepy.Client(
+        consumer_key=X_API_KEY,
+        consumer_secret=X_API_SECRET,
+        access_token=X_ACCESS_TOKEN,
+        access_token_secret=X_ACCESS_SECRET,
+    )
+
+    try:
+        resp = client.create_tweet(text=text)
+    except tweepy.TweepyException as e:
+        log.error(f"X (Twitter): {e}")
+        return False
+
+    tweet_id = resp.data.get('id') if resp.data else None
+    url = f"https://twitter.com/i/web/status/{tweet_id}" if tweet_id else None
+    log.info(f"X publicado: {tweet_id}")
+    save_published(post, 'x', social_id=tweet_id, url=url)
+    return True
+
+
+def publish_threads(post: dict) -> bool:
+    """Meta Threads API v1 — publicação de texto e imagem."""
+    if not THREADS_TOKEN:
+        log.warning("Threads token não configurado — a saltar")
+        return False
+
+    GRAPH   = 'https://graph.threads.net/v1.0'
+    caption  = post.get('legenda', '')
+    hashtags = post.get('hashtags', '')
+    text     = f"{caption}\n\n{hashtags}".strip()
+    img_url  = post.get('imagem_url')
+
+    # Step 1: obter user ID
+    me_r = requests.get(f'{GRAPH}/me', params={'fields': 'id', 'access_token': THREADS_TOKEN}, timeout=15)
+    if not me_r.ok:
+        log.error(f"Threads /me: {me_r.status_code} {me_r.text}")
+        return False
+    user_id = me_r.json().get('id')
+
+    # Step 2: criar container
+    params = {'access_token': THREADS_TOKEN, 'text': text}
+    if img_url:
+        params['media_type'] = 'IMAGE'
+        params['image_url']  = img_url
+    else:
+        params['media_type'] = 'TEXT'
+
+    r = requests.post(f'{GRAPH}/{user_id}/threads', params=params, timeout=30)
+    if not r.ok:
+        log.error(f"Threads create: {r.status_code} {r.text}")
+        return False
+
+    creation_id = r.json().get('id')
+
+    # Step 3: publicar
+    r2 = requests.post(
+        f'{GRAPH}/{user_id}/threads_publish',
+        params={'creation_id': creation_id, 'access_token': THREADS_TOKEN},
+        timeout=30,
+    )
+    if not r2.ok:
+        log.error(f"Threads publish: {r2.status_code} {r2.text}")
+        return False
+
+    threads_id = r2.json().get('id')
+    log.info(f"Threads publicado: {threads_id}")
+    save_published(post, 'threads', social_id=threads_id)
+    return True
+
+
+def publish_bluesky(post: dict) -> bool:
+    """Bluesky AT Protocol — cria um post via app.bsky.feed.post."""
+    if not (BLUESKY_HANDLE and BLUESKY_PASSWORD):
+        log.warning("Bluesky credenciais não configuradas — a saltar")
+        return False
+
+    caption  = post.get('legenda', '')
+    hashtags = post.get('hashtags', '')
+    text     = f"{caption}\n\n{hashtags}".strip()[:300]
+
+    # Autenticar
+    auth_r = requests.post('https://bsky.social/xrpc/com.atproto.server.createSession', json={
+        'identifier': BLUESKY_HANDLE,
+        'password':   BLUESKY_PASSWORD,
+    }, timeout=15)
+    if not auth_r.ok:
+        log.error(f"Bluesky auth: {auth_r.status_code} {auth_r.text}")
+        return False
+
+    session   = auth_r.json()
+    jwt       = session.get('accessJwt')
+    did       = session.get('did')
+    headers   = {'Authorization': f'Bearer {jwt}', 'Content-Type': 'application/json'}
+
+    record = {
+        '$type':    'app.bsky.feed.post',
+        'text':     text,
+        'createdAt': datetime.now(timezone.utc).isoformat(),
+        'langs':    ['pt'],
+    }
+
+    r = requests.post('https://bsky.social/xrpc/com.atproto.repo.createRecord', headers=headers, json={
+        'repo':       did,
+        'collection': 'app.bsky.feed.post',
+        'record':     record,
+    }, timeout=30)
+    if not r.ok:
+        log.error(f"Bluesky: {r.status_code} {r.text}")
+        return False
+
+    uri = r.json().get('uri', '')
+    log.info(f"Bluesky publicado: {uri}")
+    save_published(post, 'bluesky', social_id=uri)
+    return True
+
+
 PUBLISHERS = {
     'instagram': publish_instagram,
     'tiktok':    publish_tiktok,
     'facebook':  publish_facebook,
     'youtube':   publish_youtube,
+    'pinterest': publish_pinterest,
+    'linkedin':  publish_linkedin,
+    'x':         publish_x,
+    'twitter':   publish_x,
+    'threads':   publish_threads,
+    'bluesky':   publish_bluesky,
 }
 
 

@@ -37,14 +37,24 @@ async function renderAvatares(container) {
         <div class="section-title">Avatares</div>
         <div class="section-subtitle">Gerencie os seus criadores de conteúdo</div>
       </div>
-      <button class="btn btn-primary" onclick="openAvatarModal(null)">
-        <i class="fa-solid fa-plus"></i> Novo avatar
-      </button>
+      <div class="flex gap-1">
+        <select id="av-grupo-filter" class="form-control" style="width:auto" onchange="filterAvatarGrid()">
+          <option value="">Todos os grupos</option>
+          ${[...new Set(avatares.map(a => a.grupo).filter(Boolean))].map(g => `<option value="${escHtml(g)}">${escHtml(g)}</option>`).join('')}
+        </select>
+        <label class="btn btn-secondary" style="cursor:pointer">
+          <input type="checkbox" id="av-show-archived" style="display:none" onchange="filterAvatarGrid()">
+          <i class="fa-solid fa-box-archive"></i> Arquivados
+        </label>
+        <button class="btn btn-primary" onclick="openAvatarModal(null)">
+          <i class="fa-solid fa-plus"></i> Novo avatar
+        </button>
+      </div>
     </div>
 
     <div class="grid-auto" id="avatarGrid">
       ${avatares.length
-        ? avatares.map(a => renderAvatarCard(a, String(a.id) === String(activeId))).join('')
+        ? avatares.filter(a => !a.arquivado).map(a => renderAvatarCard(a, String(a.id) === String(activeId))).join('')
         : `<div class="empty-state" style="grid-column:1/-1;padding:60px 20px">
              <i class="fa-solid fa-masks-theater" style="font-size:2.5rem;color:var(--border);margin-bottom:12px"></i>
              <p style="font-size:1.1rem;font-weight:600;margin-bottom:6px">Sem avatares criados</p>
@@ -108,6 +118,11 @@ function renderAvatarCard(a, isActive) {
           : '<span class="btn btn-sm btn-secondary flex-1 text-center" style="cursor:default;opacity:.5"><i class="fa-solid fa-star"></i> Ativo</span>'}
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarDashboard('${a.id}')" title="Dashboard — canais, contas, receitas"><i class="fa-solid fa-table-columns" style="color:var(--accent)"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarModal('${a.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="cloneAvatar('${a.id}')" title="Duplicar avatar"><i class="fa-solid fa-copy"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openMediaKit('${a.id}')" title="Media Kit"><i class="fa-solid fa-file-pdf"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="archiveAvatar('${a.id}', ${!!a.arquivado})" title="${a.arquivado ? 'Desarquivar' : 'Arquivar'}">
+          <i class="fa-solid fa-${a.arquivado ? 'box-open' : 'box-archive'}"></i>
+        </button>
         <button class="btn btn-sm btn-danger btn-icon" onclick="confirmDeleteAvatar('${a.id}', this.dataset.nome)" data-nome="${escHtml(a.nome)}" title="Apagar"><i class="fa-solid fa-trash"></i></button>
       </div>
     </div>`;
@@ -1071,4 +1086,200 @@ async function saveContas(avatarId) {
   else app.toast('Nenhuma alteração para guardar', 'info');
 
   app.closeModal();
+}
+
+/* ── Filtrar grid de avatares ── */
+function filterAvatarGrid() {
+  const grupo      = document.getElementById('av-grupo-filter')?.value || '';
+  const showArch   = document.getElementById('av-show-archived')?.checked || false;
+  const avatares   = app.getAvatares();
+  const activeId   = Config.get('ACTIVE_AVATAR') || avatares[0]?.id;
+
+  const filtered = avatares.filter(a => {
+    if (!showArch && a.arquivado) return false;
+    if (grupo && a.grupo !== grupo) return false;
+    return true;
+  });
+
+  const grid = document.getElementById('avatarGrid');
+  if (!grid) return;
+  grid.innerHTML = filtered.length
+    ? filtered.map(a => renderAvatarCard(a, String(a.id) === String(activeId))).join('')
+    : `<div class="empty-state" style="grid-column:1/-1;padding:40px"><i class="fa-solid fa-box"></i><p>Nenhum avatar encontrado</p></div>`;
+}
+
+/* ── Arquivar/Desarquivar avatar ── */
+async function archiveAvatar(id, isArchived) {
+  const action = isArchived ? 'desarquivar' : 'arquivar';
+  if (!confirm(`${action.charAt(0).toUpperCase()+action.slice(1)} este avatar?`)) return;
+
+  if (DB.ready()) {
+    const { error } = await DB.upsertAvatar({ id, arquivado: !isArchived });
+    if (error) { app.toast('Erro: ' + app.fmtErr(error), 'error'); return; }
+    DB.logActivity(`Avatar ${action}do`, { entidade: 'avatar', entidade_id: id });
+  }
+  // Actualizar estado local
+  const avatares = app.getAvatares();
+  const av = avatares.find(a => String(a.id) === String(id));
+  if (av) av.arquivado = !isArchived;
+  app.toast(`Avatar ${action}do!`, 'success');
+  filterAvatarGrid();
+}
+
+/* ── Duplicar avatar ── */
+async function cloneAvatar(id) {
+  const avatares = app.getAvatares();
+  const original = avatares.find(a => String(a.id) === String(id));
+  if (!original) return;
+
+  const clone = {
+    nome:        original.nome + ' (cópia)',
+    nicho:       original.nicho,
+    emoji:       original.emoji,
+    prompt_base: original.prompt_base,
+    categorias:  original.categorias,
+    plataformas: original.plataformas,
+    grupo:       original.grupo,
+    persona_ia:  original.persona_ia,
+  };
+
+  if (DB.ready()) {
+    const { data, error } = await DB.upsertAvatar(clone);
+    if (error) { app.toast('Erro ao duplicar: ' + app.fmtErr(error), 'error'); return; }
+    app.setAvatares([...avatares, data]);
+    DB.logActivity('Avatar duplicado', { entidade: 'avatar', entidade_id: data.id });
+  }
+  app.toast(`"${original.nome}" duplicado!`, 'success');
+  filterAvatarGrid();
+}
+
+/* ── Score de consistência ── */
+async function openConsistencyScore(avatarId) {
+  const avatares = app.getAvatares();
+  const avatar = avatares.find(a => String(a.id) === String(avatarId));
+  if (!avatar) return;
+
+  app.openModal('A calcular score…', '<div class="loading-overlay" style="padding:40px"><div class="spinner"></div></div>', '');
+
+  let stats = { postsThisMonth: 0, lastPost: null, platforms: avatar.plataformas || [], avgLikes: 0 };
+
+  if (DB.ready()) {
+    const firstDayOfMonth = new Date();
+    firstDayOfMonth.setDate(1);
+    firstDayOfMonth.setHours(0,0,0,0);
+
+    const { data: posts } = await DB.getPosts({ avatar_id: avatarId, status: 'publicado', limit: 100 });
+    const thisMonth = (posts || []).filter(p => new Date(p.agendado_para) >= firstDayOfMonth);
+    stats.postsThisMonth = thisMonth.length;
+    stats.lastPost = posts?.[0]?.agendado_para ? new Date(posts[0].agendado_para).toLocaleDateString('pt-PT') : 'N/A';
+
+    const { data: pub } = await DB.getAnalytics(avatarId);
+    const likes = (pub || []).map(p => p.likes || 0);
+    stats.avgLikes = likes.length ? Math.round(likes.reduce((a,b) => a+b, 0) / likes.length) : 0;
+  }
+
+  // Score simples: posts/mês * 20, max 100
+  const score = Math.min(100, stats.postsThisMonth * 10);
+  const scoreColor = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--accent)' : 'var(--red)';
+  const scoreLabel = score >= 70 ? 'Excelente' : score >= 40 ? 'Regular' : 'Baixo';
+
+  let insight = '';
+  try {
+    insight = await AI.generateConsistencyInsight(avatar, stats);
+  } catch (_) {}
+
+  const body = `
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:3.5rem;font-weight:900;color:${scoreColor}">${score}</div>
+      <div style="color:${scoreColor};font-weight:700;font-size:1.1rem">${scoreLabel}</div>
+      <div class="text-sm text-muted mt-1">Score de consistência</div>
+    </div>
+    <div class="grid-2 mb-3">
+      ${[
+        ['Posts este mês', stats.postsThisMonth],
+        ['Último post', stats.lastPost || '—'],
+        ['Média de likes', stats.avgLikes],
+        ['Plataformas', (stats.platforms || []).join(', ') || '—'],
+      ].map(([k,v]) => `
+        <div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:12px;text-align:center">
+          <div style="font-size:1.2rem;font-weight:700">${v}</div>
+          <div class="text-sm text-muted">${k}</div>
+        </div>`).join('')}
+    </div>
+    ${insight ? `<div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:14px;font-size:.88rem;line-height:1.6;font-style:italic">${insight}</div>` : ''}`;
+
+  app.openModal(`Score — ${avatar.nome}`, body, '<button class="btn btn-primary" onclick="app.closeModal()">Fechar</button>');
+}
+
+/* ── Media Kit ── */
+async function openMediaKit(avatarId) {
+  const avatares = app.getAvatares();
+  const avatar   = avatares.find(a => String(a.id) === String(avatarId));
+  if (!avatar) return;
+
+  app.openModal('A gerar Media Kit…', '<div class="loading-overlay" style="padding:40px"><div class="spinner"></div></div>', '');
+
+  let stats = { seguidores: 'N/A', er: 'N/A', postsPerMonth: 0 };
+  if (DB.ready()) {
+    const firstDay = new Date(); firstDay.setDate(1); firstDay.setHours(0,0,0,0);
+    const { data: posts } = await DB.getPosts({ avatar_id: avatarId, status: 'publicado', limit: 100 });
+    stats.postsPerMonth = (posts || []).filter(p => p.agendado_para && new Date(p.agendado_para) >= firstDay).length;
+  }
+
+  // Buscar preços de parceria
+  let prices = [];
+  if (DB.ready()) {
+    const { data } = await DB.getPartnershipPrices(avatarId);
+    prices = data || [];
+  }
+
+  let kitText = '';
+  try { kitText = await AI.generateMediaKit(avatar, stats); } catch (_) {}
+
+  const pricesHtml = prices.length
+    ? `<div style="margin-top:16px">
+        <div style="font-weight:700;margin-bottom:8px">Tabela de preços</div>
+        <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:6px;text-align:left">Formato</th>
+            <th style="padding:6px;text-align:right">Preço</th>
+          </tr></thead>
+          <tbody>${prices.map(p => `
+            <tr style="border-bottom:1px solid var(--border-light)">
+              <td style="padding:6px">${p.tipo}</td>
+              <td style="padding:6px;text-align:right;font-weight:700">€${p.preco}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+      </div>`
+    : '<div class="text-sm text-muted mt-2">Sem tabela de preços configurada. Adiciona em Monetização → Preços de Parceria.</div>';
+
+  const body = `
+    <div style="max-height:60vh;overflow-y:auto;padding-right:4px">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:2rem">${avatar.emoji || '🎭'}</div>
+        <div style="font-size:1.3rem;font-weight:800">${escHtml(avatar.nome)}</div>
+        <div class="text-muted">${escHtml(avatar.nicho)}</div>
+        <div style="margin-top:6px;font-size:.8rem">${(avatar.plataformas || []).map(p => app.platformLabel(p)).join(' · ')}</div>
+      </div>
+      ${kitText ? `<div style="font-size:.88rem;line-height:1.7;margin-bottom:12px;white-space:pre-wrap">${kitText}</div>` : ''}
+      ${pricesHtml}
+    </div>`;
+
+  app.openModal(`Media Kit — ${avatar.nome}`, body, `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Fechar</button>
+    <button class="btn btn-primary" onclick="printMediaKit()">
+      <i class="fa-solid fa-print"></i> Imprimir / PDF
+    </button>`);
+}
+
+function printMediaKit() {
+  const content = document.getElementById('modalBody')?.innerHTML;
+  if (!content) return;
+  const win = window.open('', '_blank');
+  win.document.write(`<html><head><title>Media Kit</title>
+    <style>body{font-family:system-ui,sans-serif;padding:40px;max-width:700px;margin:0 auto}
+    table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #ddd}</style>
+    </head><body>${content}</body></html>`);
+  win.document.close();
+  win.print();
 }

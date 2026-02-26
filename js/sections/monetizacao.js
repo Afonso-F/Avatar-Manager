@@ -70,6 +70,12 @@ async function renderMonetizacao(container) {
         <div class="section-subtitle">Receitas de todos os conteúdos — ${mesNome}</div>
       </div>
       <div class="flex gap-1">
+        <button class="btn btn-secondary" onclick="openRevenueSimulator()">
+          <i class="fa-solid fa-calculator"></i> Simulador
+        </button>
+        <button class="btn btn-secondary" onclick="exportFiscalReport()">
+          <i class="fa-solid fa-file-invoice"></i> Relatório Fiscal
+        </button>
         <button class="btn btn-secondary" onclick="exportReceitasCsv()">
           <i class="fa-solid fa-file-csv"></i> Exportar CSV
         </button>
@@ -178,11 +184,31 @@ async function renderMonetizacao(container) {
       </div>
     </div>
 
+    <!-- Tabela de preços de parceria -->
+    <div class="card mt-3" id="partnership-prices-card">
+      <div class="card-header">
+        <div class="card-title"><i class="fa-solid fa-handshake" style="color:var(--blue)"></i> Tabela de preços de parceria</div>
+        <button class="btn btn-sm btn-secondary" onclick="openPartnershipPriceForm()"><i class="fa-solid fa-plus"></i> Adicionar</button>
+      </div>
+      <div id="partnership-prices-list"><div class="spinner-block"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- Tracking de links de afiliados -->
+    <div class="card mt-3" id="affiliate-links-card">
+      <div class="card-header">
+        <div class="card-title"><i class="fa-solid fa-link" style="color:var(--yellow)"></i> Links de afiliados</div>
+        <button class="btn btn-sm btn-secondary" onclick="openAffiliateLinkForm()"><i class="fa-solid fa-plus"></i> Adicionar</button>
+      </div>
+      <div id="affiliate-links-list"><div class="spinner-block"><div class="spinner"></div></div></div>
+    </div>
+
     <!-- Modais -->
     <div id="monetizacao-modals"></div>
   `;
 
   loadDespesas();
+  loadPartnershipPrices();
+  loadAffiliateLinks();
 }
 
 /* ── Cards por plataforma ──────────────────────────────── */
@@ -1137,3 +1163,296 @@ function exportReceitasCsv() {
 }
 
 // openAvatarFanslyModal está definido em avatares.js e é partilhado globalmente
+
+/* ── Simulador de receita ── */
+function openRevenueSimulator() {
+  const body = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label class="form-label">Subscritores Fansly</label>
+        <input id="sim-fansly-subs" class="form-control" type="number" value="100" min="0" oninput="calcSimulator()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Preço sub Fansly (€)</label>
+        <input id="sim-fansly-price" class="form-control" type="number" value="9.99" min="0" step="0.01" oninput="calcSimulator()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Subscritores OnlyFans</label>
+        <input id="sim-of-subs" class="form-control" type="number" value="50" min="0" oninput="calcSimulator()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Preço sub OnlyFans (€)</label>
+        <input id="sim-of-price" class="form-control" type="number" value="14.99" min="0" step="0.01" oninput="calcSimulator()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Views YouTube/mês</label>
+        <input id="sim-yt-views" class="form-control" type="number" value="10000" min="0" oninput="calcSimulator()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">RPM YouTube (€)</label>
+        <input id="sim-yt-rpm" class="form-control" type="number" value="2.5" min="0" step="0.1" oninput="calcSimulator()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Streams música/mês</label>
+        <input id="sim-streams" class="form-control" type="number" value="5000" min="0" oninput="calcSimulator()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Taxa plataforma (%)</label>
+        <input id="sim-platform-fee" class="form-control" type="number" value="20" min="0" max="100" oninput="calcSimulator()">
+      </div>
+    </div>
+    <div id="sim-results" style="margin-top:16px;padding:16px;background:var(--bg-elevated);border-radius:8px">
+      <div style="font-size:1.1rem;font-weight:600;margin-bottom:8px">Resultado estimado</div>
+      <div id="sim-output"></div>
+    </div>`;
+  app.openModal('Simulador de receita', body, `<button class="btn btn-primary" onclick="app.closeModal()">Fechar</button>`);
+  setTimeout(calcSimulator, 100);
+}
+
+function calcSimulator() {
+  const fanlySubs   = parseFloat(document.getElementById('sim-fansly-subs')?.value || 0);
+  const fanlyPrice  = parseFloat(document.getElementById('sim-fansly-price')?.value || 0);
+  const ofSubs      = parseFloat(document.getElementById('sim-of-subs')?.value || 0);
+  const ofPrice     = parseFloat(document.getElementById('sim-of-price')?.value || 0);
+  const ytViews     = parseFloat(document.getElementById('sim-yt-views')?.value || 0);
+  const ytRpm       = parseFloat(document.getElementById('sim-yt-rpm')?.value || 0);
+  const streams     = parseFloat(document.getElementById('sim-streams')?.value || 0);
+  const fee         = parseFloat(document.getElementById('sim-platform-fee')?.value || 20) / 100;
+  const feeMulti    = 1 - fee;
+
+  const fanslyRec   = fanlySubs * fanlyPrice * feeMulti;
+  const ofRec       = ofSubs * ofPrice * feeMulti;
+  const ytRec       = (ytViews / 1000) * ytRpm;
+  const musicRec    = streams * 0.004;
+  const total       = fanslyRec + ofRec + ytRec + musicRec;
+
+  const el = document.getElementById('sim-output');
+  if (!el) return;
+  el.innerHTML = [
+    { label: 'Fansly', val: fanslyRec, color: 'var(--pink)' },
+    { label: 'OnlyFans', val: ofRec, color: 'var(--blue)' },
+    { label: 'YouTube', val: ytRec, color: 'var(--red)' },
+    { label: 'Música', val: musicRec, color: 'var(--accent)' },
+  ].map(r => `
+    <div class="metric-row"><span class="metric-label">${r.label}</span><span class="metric-value" style="color:${r.color}">€${r.val.toFixed(2)}</span></div>
+  `).join('') + `<div class="metric-row" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+    <span class="metric-label" style="font-weight:700">TOTAL</span>
+    <span class="metric-value" style="color:var(--green);font-size:1.2rem;font-weight:800">€${total.toFixed(2)}/mês</span>
+  </div>
+  <div class="text-muted text-sm" style="margin-top:8px">Anual: <strong style="color:var(--green)">€${(total*12).toFixed(0)}</strong></div>`;
+}
+
+/* ── Relatório Fiscal ── */
+function exportFiscalReport() {
+  const despesas = typeof _despesasCache !== 'undefined' ? _despesasCache : [];
+  const year = new Date().getFullYear();
+  const lines = [
+    `RELATÓRIO FISCAL ${year}`,
+    `Gerado em: ${new Date().toLocaleString('pt-PT')}`,
+    '',
+    '=== DESPESAS ===',
+    'Data,Descrição,Categoria,Valor (€)',
+    ...despesas.map(d => `${d.data || ''},${d.descricao || ''},"${d.categoria || ''}","-${parseFloat(d.valor||0).toFixed(2)}"`),
+    '',
+    `TOTAL DESPESAS:,,,"-€${despesas.reduce((s,d) => s + parseFloat(d.valor||0), 0).toFixed(2)}"`,
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `relatorio_fiscal_${year}.csv`;
+  link.click();
+  app.toast('Relatório fiscal exportado!', 'success');
+}
+
+/* ── Tabela de preços de parceria ── */
+let _partnershipPrices = [];
+
+async function loadPartnershipPrices() {
+  const el = document.getElementById('partnership-prices-list');
+  if (!el) return;
+  if (DB.ready()) {
+    const { data } = await DB.getPartnershipPrices();
+    _partnershipPrices = data || [];
+  }
+  renderPartnershipPrices();
+}
+
+function renderPartnershipPrices() {
+  const el = document.getElementById('partnership-prices-list');
+  if (!el) return;
+  if (!_partnershipPrices.length) {
+    el.innerHTML = '<div class="text-muted text-sm text-center" style="padding:16px">Sem preços configurados. Adiciona os teus preços de parceria.</div>';
+    return;
+  }
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse">
+    <thead><tr style="border-bottom:1px solid var(--border)">
+      <th style="text-align:left;padding:8px;font-size:.8rem;color:var(--text-muted)">Tipo</th>
+      <th style="text-align:left;padding:8px;font-size:.8rem;color:var(--text-muted)">Descrição</th>
+      <th style="text-align:right;padding:8px;font-size:.8rem;color:var(--text-muted)">Preço (€)</th>
+      <th style="padding:8px"></th>
+    </tr></thead>
+    <tbody>${_partnershipPrices.map(p => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px;font-size:.85rem">${p.tipo || '—'}</td>
+        <td style="padding:8px;font-size:.85rem;color:var(--text-secondary)">${p.descricao || '—'}</td>
+        <td style="padding:8px;font-size:.85rem;text-align:right;color:var(--green);font-weight:700">€${parseFloat(p.preco||0).toFixed(2)}</td>
+        <td style="padding:8px;text-align:right">
+          <button class="btn btn-sm btn-danger btn-icon" onclick="deletePartnershipPrice('${p.id}')"><i class="fa-solid fa-trash"></i></button>
+        </td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function openPartnershipPriceForm() {
+  const body = `
+    <div class="form-group">
+      <label class="form-label">Tipo</label>
+      <select id="pp-tipo" class="form-control">
+        ${['Post Instagram','Story Instagram','Reel','TikTok','YouTube Video','YouTube Shorts','Menção Stories','Pack Mensal'].map(t => `<option>${t}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrição (opcional)</label>
+      <input id="pp-desc" class="form-control" placeholder="Detalhes adicionais…">
+    </div>
+    <div class="form-group mb-0">
+      <label class="form-label">Preço (€)</label>
+      <input id="pp-preco" class="form-control" type="number" min="0" step="0.01" placeholder="0.00">
+    </div>`;
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="savePartnershipPrice()"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>`;
+  app.openModal('Adicionar preço de parceria', body, footer);
+}
+
+async function savePartnershipPrice() {
+  const tipo    = document.getElementById('pp-tipo')?.value;
+  const desc    = document.getElementById('pp-desc')?.value.trim();
+  const preco   = parseFloat(document.getElementById('pp-preco')?.value || '0');
+  if (isNaN(preco) || preco <= 0) { app.toast('Preço inválido', 'warning'); return; }
+  const price   = { tipo, descricao: desc, preco };
+  if (DB.ready()) {
+    const { data, error } = await DB.upsertPartnershipPrice(price);
+    if (error) { app.toast('Erro: ' + app.fmtErr(error), 'error'); return; }
+    if (data?.[0]) _partnershipPrices = [..._partnershipPrices, data[0]];
+  } else {
+    _partnershipPrices = [..._partnershipPrices, { id: Date.now(), ...price }];
+  }
+  app.toast('Preço guardado!', 'success');
+  app.closeModal();
+  renderPartnershipPrices();
+}
+
+async function deletePartnershipPrice(id) {
+  if (!confirm('Apagar este preço?')) return;
+  if (DB.ready()) {
+    const { error } = await DB.deletePartnershipPrice(id);
+    if (error) { app.toast('Erro: ' + app.fmtErr(error), 'error'); return; }
+  }
+  _partnershipPrices = _partnershipPrices.filter(p => String(p.id) !== String(id));
+  renderPartnershipPrices();
+  app.toast('Preço removido', 'success');
+}
+
+/* ── Affiliate Links ── */
+let _affiliateLinks = [];
+
+async function loadAffiliateLinks() {
+  const el = document.getElementById('affiliate-links-list');
+  if (!el) return;
+  if (DB.ready()) {
+    const { data } = await DB.getAffiliateLinks();
+    _affiliateLinks = data || [];
+  }
+  renderAffiliateLinks();
+}
+
+function renderAffiliateLinks() {
+  const el = document.getElementById('affiliate-links-list');
+  if (!el) return;
+  if (!_affiliateLinks.length) {
+    el.innerHTML = '<div class="text-muted text-sm text-center" style="padding:16px">Sem links de afiliados. Adiciona os teus links para rastrear cliques.</div>';
+    return;
+  }
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse">
+    <thead><tr style="border-bottom:1px solid var(--border)">
+      <th style="text-align:left;padding:8px;font-size:.8rem;color:var(--text-muted)">Nome</th>
+      <th style="text-align:left;padding:8px;font-size:.8rem;color:var(--text-muted)">URL</th>
+      <th style="text-align:right;padding:8px;font-size:.8rem;color:var(--text-muted)">Cliques</th>
+      <th style="text-align:right;padding:8px;font-size:.8rem;color:var(--text-muted)">Receita</th>
+      <th style="padding:8px"></th>
+    </tr></thead>
+    <tbody>${_affiliateLinks.map(l => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px;font-size:.85rem;font-weight:600">${l.nome || '—'}</td>
+        <td style="padding:8px;font-size:.75rem;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis">
+          <a href="${l.url || '#'}" target="_blank" style="color:var(--accent)">${l.url || '—'}</a>
+        </td>
+        <td style="padding:8px;text-align:right;font-size:.85rem">${l.cliques || 0}</td>
+        <td style="padding:8px;text-align:right;font-size:.85rem;color:var(--green);font-weight:700">€${parseFloat(l.receita||0).toFixed(2)}</td>
+        <td style="padding:8px;text-align:right;display:flex;gap:4px;justify-content:flex-end">
+          <button class="btn btn-sm btn-secondary btn-icon" onclick="copyAffiliateLink('${l.url||''}','${l.id}')" title="Copiar e registar clique"><i class="fa-solid fa-copy"></i></button>
+          <button class="btn btn-sm btn-danger btn-icon" onclick="deleteAffiliateLink('${l.id}')"><i class="fa-solid fa-trash"></i></button>
+        </td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function openAffiliateLinkForm() {
+  const body = `
+    <div class="form-group">
+      <label class="form-label">Nome / Programa</label>
+      <input id="aff-nome" class="form-control" placeholder="Ex: Amazon Associates">
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL de afiliado</label>
+      <input id="aff-url" class="form-control" type="url" placeholder="https://…">
+    </div>
+    <div class="form-group mb-0">
+      <label class="form-label">Receita inicial (€)</label>
+      <input id="aff-receita" class="form-control" type="number" min="0" step="0.01" value="0">
+    </div>`;
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveAffiliateLink()"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>`;
+  app.openModal('Adicionar link de afiliado', body, footer);
+}
+
+async function saveAffiliateLink() {
+  const nome    = document.getElementById('aff-nome')?.value.trim();
+  const url     = document.getElementById('aff-url')?.value.trim();
+  const receita = parseFloat(document.getElementById('aff-receita')?.value || '0');
+  if (!nome || !url) { app.toast('Nome e URL são obrigatórios', 'warning'); return; }
+  const link = { nome, url, receita, cliques: 0 };
+  if (DB.ready()) {
+    const { data, error } = await DB.upsertAffiliateLink(link);
+    if (error) { app.toast('Erro: ' + app.fmtErr(error), 'error'); return; }
+    if (data?.[0]) _affiliateLinks = [..._affiliateLinks, data[0]];
+  } else {
+    _affiliateLinks = [..._affiliateLinks, { id: Date.now(), ...link }];
+  }
+  app.toast('Link guardado!', 'success');
+  app.closeModal();
+  renderAffiliateLinks();
+}
+
+async function copyAffiliateLink(url, id) {
+  if (!url) return;
+  try { await navigator.clipboard.writeText(url); } catch {}
+  if (DB.ready() && id) await DB.incrementAffiliateLinkClicks(id);
+  const link = _affiliateLinks.find(l => String(l.id) === String(id));
+  if (link) link.cliques = (link.cliques || 0) + 1;
+  renderAffiliateLinks();
+  app.toast('Link copiado! Clique registado.', 'success');
+}
+
+async function deleteAffiliateLink(id) {
+  if (!confirm('Apagar este link?')) return;
+  if (DB.ready()) {
+    const { error } = await DB.deleteAffiliateLink(id);
+    if (error) { app.toast('Erro: ' + app.fmtErr(error), 'error'); return; }
+  }
+  _affiliateLinks = _affiliateLinks.filter(l => String(l.id) !== String(id));
+  renderAffiliateLinks();
+  app.toast('Link removido', 'success');
+}

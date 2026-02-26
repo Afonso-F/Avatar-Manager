@@ -471,5 +471,73 @@ const DB = (() => {
     }
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, updateYoutubeRefImages, uploadYoutubeReferenceImage, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage, getOnlyfansStats, upsertOnlyfansStats, getPatreonStats, upsertPatreonStats, getTwitchStats, upsertTwitchStats, getAfiliados, upsertAfiliado, deleteAfiliado, getVendasDiretas, upsertVendaDireta, deleteVendaDireta };
+  /* ── Comentários em posts ── */
+  async function getPostComentarios(postId) {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('post_comentarios').select('*').eq('post_id', postId).order('criado_em');
+  }
+
+  async function addPostComentario(postId, texto) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('post_comentarios').insert({ post_id: postId, texto }).select().single();
+  }
+
+  async function deletePostComentario(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('post_comentarios').delete().eq('id', id);
+  }
+
+  /* ── Log de actividade ── */
+  async function getActivityLog({ limit = 50 } = {}) {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('activity_log').select('*').order('criado_em', { ascending: false }).limit(limit);
+  }
+
+  async function logActivity(acao, { entidade, entidade_id, detalhes } = {}) {
+    if (!_client) return;
+    _client.from('activity_log').insert({ acao, entidade, entidade_id, detalhes }).then(() => {});
+  }
+
+  /* ── Preços de parceria ── */
+  async function getPartnershipPrices(avatarId) {
+    if (!_client) return { data: [], error: 'not connected' };
+    let q = _client.from('partnership_prices').select('*').order('tipo');
+    if (avatarId) q = q.eq('avatar_id', avatarId);
+    return q;
+  }
+
+  async function upsertPartnershipPrice(price) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('partnership_prices').upsert(price).select().single();
+  }
+
+  async function deletePartnershipPrice(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('partnership_prices').delete().eq('id', id);
+  }
+
+  /* ── Links de afiliados ── */
+  async function getAffiliateLinks(avatarId) {
+    if (!_client) return { data: [], error: 'not connected' };
+    let q = _client.from('affiliate_links').select('*').order('nome');
+    if (avatarId) q = q.eq('avatar_id', avatarId);
+    return q;
+  }
+
+  async function upsertAffiliateLink(link) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('affiliate_links').upsert(link).select().single();
+  }
+
+  async function deleteAffiliateLink(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('affiliate_links').delete().eq('id', id);
+  }
+
+  async function incrementAffiliateLinkClicks(id) {
+    if (!_client) return;
+    _client.rpc('increment_affiliate_clicks', { link_id: id }).then(() => {});
+  }
+
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, updateYoutubeRefImages, uploadYoutubeReferenceImage, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage, getOnlyfansStats, upsertOnlyfansStats, getPatreonStats, upsertPatreonStats, getTwitchStats, upsertTwitchStats, getAfiliados, upsertAfiliado, deleteAfiliado, getVendasDiretas, upsertVendaDireta, deleteVendaDireta, getPostComentarios, addPostComentario, deletePostComentario, getActivityLog, logActivity, getPartnershipPrices, upsertPartnershipPrice, deletePartnershipPrice, getAffiliateLinks, upsertAffiliateLink, deleteAffiliateLink, incrementAffiliateLinkClicks };
 })();

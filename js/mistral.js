@@ -285,6 +285,219 @@ Tom: profissional mas encorajador. Responde em português.
     return generateText(prompt, { temperature: 0.8, maxTokens: 600 });
   }
 
+  /* ── Geração em lote ── */
+  async function generateBatchPosts(avatar, topic, count = 10) {
+    const prompt = `
+Tens o papel de ${avatar.nome}, criador de conteúdo de ${avatar.nicho}.
+Estilo: ${avatar.prompt_base || 'criativo, envolvente, autêntico'}.
+
+Gera ${count} legendas DIFERENTES para posts sobre: "${topic}"
+Varia o ângulo, tom e abordagem em cada uma.
+
+Responde APENAS em JSON válido:
+{ "posts": [ { "legenda": "...", "hashtags": "#tag1 #tag2 ..." }, ... ] }
+    `.trim();
+    const raw = await generateText(prompt, { temperature: 0.95, maxTokens: 2000 });
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(match?.[0] || raw);
+      return parsed.posts || [];
+    } catch {
+      return [{ legenda: raw, hashtags: '' }];
+    }
+  }
+
+  /* ── Variantes A/B ── */
+  async function generateVariants(avatar, topic, count = 3) {
+    const styles = ['emocional e pessoal', 'informativo e educativo', 'humorístico e descontraído', 'inspiracional e motivacional'];
+    const prompt = `
+Tens o papel de ${avatar.nome} (${avatar.nicho}).
+Gera ${count} variantes de legenda para: "${topic}"
+Cada variante com um estilo diferente: ${styles.slice(0, count).join(', ')}.
+
+Responde APENAS em JSON:
+{ "variantes": [ { "estilo": "...", "legenda": "...", "hashtags": "..." }, ... ] }
+    `.trim();
+    const raw = await generateText(prompt, { temperature: 0.9, maxTokens: 1200 });
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      return JSON.parse(match?.[0] || raw).variantes || [];
+    } catch {
+      return [{ estilo: 'Variante', legenda: raw, hashtags: '' }];
+    }
+  }
+
+  /* ── Reescrever para plataforma ── */
+  async function rewriteForPlatform(caption, platform, tone = 'neutro') {
+    const guides = {
+      instagram:  'emotivo, 3-5 frases, emojis, call-to-action no final',
+      tiktok:     'curto, energético, gancho inicial forte, máximo 150 caracteres',
+      youtube:    'descritivo, palavras-chave SEO, 3-5 frases informativas',
+      facebook:   'conversacional, pergunta para gerar comentários, 3-4 frases',
+      linkedin:   'profissional, perspectiva de negócio, insights valiosos',
+      pinterest:  'descritivo, foco no visual, inspiracional',
+      twitter:    'conciso, máximo 280 caracteres, impacto imediato',
+      threads:    'casual, autêntico, máximo 500 caracteres',
+      bluesky:    'conciso, directo, máximo 300 caracteres',
+    };
+    const guide = guides[platform] || 'adaptado à plataforma';
+    const prompt = `
+Reescreve esta legenda para ${platform}: "${caption}"
+Tom: ${tone}
+Guia da plataforma: ${guide}
+Devolve APENAS a legenda reescrita, sem explicações.
+    `.trim();
+    return generateText(prompt, { temperature: 0.85 });
+  }
+
+  /* ── Tradução automática ── */
+  async function translateCaption(caption, targetLang) {
+    const langs = {
+      'en': 'inglês', 'es': 'espanhol', 'fr': 'francês',
+      'de': 'alemão', 'it': 'italiano', 'pt': 'português',
+      'br': 'português do Brasil', 'nl': 'neerlandês',
+    };
+    const langName = langs[targetLang] || targetLang;
+    const prompt = `Traduz para ${langName}, mantendo o mesmo tom e estilo:\n"${caption}"\nDevolve APENAS a tradução.`;
+    return generateText(prompt, { temperature: 0.3 });
+  }
+
+  /* ── Ajustar tom ── */
+  async function adjustTone(caption, tone) {
+    const toneMap = {
+      formal:       'formal e profissional',
+      casual:       'casual e descontraído',
+      humoristico:  'humorístico e divertido',
+      inspiracional:'inspiracional e motivacional',
+      emocional:    'emotivo e pessoal',
+      educativo:    'educativo e informativo',
+      urgente:      'urgente e com call-to-action forte',
+    };
+    const toneDesc = toneMap[tone] || tone;
+    const prompt = `
+Reescreve esta legenda com tom ${toneDesc}:
+"${caption}"
+Mantém o mesmo conteúdo/tema mas muda o tom.
+Devolve APENAS a legenda reescrita.
+    `.trim();
+    return generateText(prompt, { temperature: 0.85 });
+  }
+
+  /* ── Guião de vídeo ── */
+  async function generateVideoScript(avatar, topic, duration = 60) {
+    const prompt = `
+Cria um guião de vídeo para ${avatar.nome} (${avatar.nicho}) sobre "${topic}".
+Duração: ~${duration} segundos.
+
+Estrutura:
+1. GANCHO (0-5s): frase de abertura que prende atenção
+2. PROBLEMA/CONTEXTO (5-20s): define o problema ou contexto
+3. CONTEÚDO PRINCIPAL (20-50s): os pontos principais, enumerados
+4. CALL-TO-ACTION (50-${duration}s): o que o espectador deve fazer
+
+Formato de resposta em JSON:
+{
+  "gancho": "...",
+  "contexto": "...",
+  "pontos": ["ponto 1", "ponto 2", "ponto 3"],
+  "cta": "...",
+  "notas_producao": "..."
+}
+    `.trim();
+    const raw = await generateText(prompt, { temperature: 0.8, maxTokens: 800 });
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      return JSON.parse(match?.[0] || raw);
+    } catch {
+      return { gancho: raw, contexto: '', pontos: [], cta: '', notas_producao: '' };
+    }
+  }
+
+  /* ── Sugestão de hashtags trending ── */
+  async function suggestTrendingHashtags(nicho, platform, topic) {
+    const prompt = `
+Gera 25 hashtags para ${platform} no nicho "${nicho}" sobre "${topic}".
+Inclui: 5 hashtags mega-populares (>10M posts), 10 populares (1-10M), 10 de nicho (<500k).
+Formato: apenas as hashtags separadas por espaço, com #.
+    `.trim();
+    return generateText(prompt, { temperature: 0.5 });
+  }
+
+  /* ── Score de consistência do avatar ── */
+  async function generateConsistencyInsight(avatar, stats) {
+    const prompt = `
+Analisa a consistência de publicação deste criador de conteúdo:
+- Avatar: ${avatar.nome} (${avatar.nicho})
+- Posts este mês: ${stats.postsThisMonth || 0}
+- Último post: ${stats.lastPost || 'desconhecido'}
+- Plataformas activas: ${(stats.platforms || []).join(', ') || 'N/A'}
+- Média de likes por post: ${stats.avgLikes || 0}
+
+Dá feedback conciso (2-3 frases) sobre a consistência e uma recomendação accionável.
+    `.trim();
+    return generateText(prompt, { temperature: 0.7, maxTokens: 200 });
+  }
+
+  /* ── Análise de hashtags ── */
+  async function analyzeHashtagPerformance(posts) {
+    const hashtagCounts = {};
+    posts.forEach(p => {
+      const tags = (p.hashtags || '').match(/#\w+/g) || [];
+      tags.forEach(tag => {
+        if (!hashtagCounts[tag]) hashtagCounts[tag] = { count: 0, likes: 0, views: 0 };
+        hashtagCounts[tag].count++;
+        hashtagCounts[tag].likes  += (p.likes || 0);
+        hashtagCounts[tag].views  += (p.visualizacoes || 0);
+      });
+    });
+    return Object.entries(hashtagCounts)
+      .map(([tag, data]) => ({ tag, ...data, avgLikes: data.count > 0 ? Math.round(data.likes / data.count) : 0 }))
+      .sort((a, b) => b.avgLikes - a.avgLikes)
+      .slice(0, 20);
+  }
+
+  /* ── Projecção de crescimento ── */
+  async function generateGrowthProjection(avatar, historicalData) {
+    const prompt = `
+Projecta o crescimento para os próximos 3 meses deste criador:
+- Nicho: ${avatar.nicho}
+- Dados históricos: ${JSON.stringify(historicalData)}
+
+Responde em JSON:
+{
+  "mes1": { "posts": N, "likes": N, "receita": N },
+  "mes2": { "posts": N, "likes": N, "receita": N },
+  "mes3": { "posts": N, "likes": N, "receita": N },
+  "insight": "..."
+}
+    `.trim();
+    const raw = await generateText(prompt, { temperature: 0.6, maxTokens: 400 });
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      return JSON.parse(match?.[0] || raw);
+    } catch {
+      return { mes1: {}, mes2: {}, mes3: {}, insight: raw };
+    }
+  }
+
+  /* ── Media Kit (texto do avatar) ── */
+  async function generateMediaKit(avatar, stats) {
+    const prompt = `
+Cria o texto de um media kit profissional para o criador de conteúdo:
+- Nome: ${avatar.nome}
+- Nicho: ${avatar.nicho}
+- Plataformas: ${(avatar.plataformas || []).join(', ')}
+- Bio: ${avatar.prompt_base || ''}
+- Seguidores (estimativa): ${stats.seguidores || 'N/A'}
+- Engagement rate: ${stats.er || 'N/A'}%
+- Posts/mês: ${stats.postsPerMonth || 'N/A'}
+
+Inclui: apresentação (2 parágrafos), proposta de valor, tipos de colaboração.
+Tom: profissional, persuasivo. Responde em português.
+    `.trim();
+    return generateText(prompt, { temperature: 0.75, maxTokens: 600 });
+  }
+
   return {
     generateText,
     generateImage,
@@ -296,5 +509,16 @@ Tom: profissional mas encorajador. Responde em português.
     generateImagePrompt,
     generateVideoPrompt,
     generateWeeklySummary,
+    generateBatchPosts,
+    generateVariants,
+    rewriteForPlatform,
+    translateCaption,
+    adjustTone,
+    generateVideoScript,
+    suggestTrendingHashtags,
+    generateConsistencyInsight,
+    analyzeHashtagPerformance,
+    generateGrowthProjection,
+    generateMediaKit,
   };
 })();

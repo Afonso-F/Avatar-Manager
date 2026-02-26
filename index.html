@@ -108,6 +108,15 @@
         <h1 class="page-title" id="pageTitle">Dashboard</h1>
       </div>
       <div class="topbar-right">
+        <button class="btn btn-secondary btn-icon" id="globalSearchBtn" onclick="app.openGlobalSearch()" title="Pesquisar (Cmd+K)">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+        <button class="btn btn-secondary btn-icon" id="themeToggleBtn" onclick="app.toggleTheme()" title="Mudar tema">
+          <i class="fa-solid fa-sun"></i>
+        </button>
+        <button class="btn btn-secondary btn-icon" onclick="app.openShortcutsHelp()" title="Atalhos de teclado (?)">
+          <i class="fa-solid fa-keyboard"></i>
+        </button>
         <button class="btn btn-primary" id="topbarActionBtn" onclick="app.navigate('criar')">
           <i class="fa-solid fa-plus"></i> Novo Post
         </button>
