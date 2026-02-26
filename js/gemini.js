@@ -2,8 +2,8 @@
    gemini.js — Gemini API (texto + Imagen) + fal.ai (Wan 2.6 / vídeo)
    ============================================================ */
 const Gemini = (() => {
-  const TEXT_MODEL  = 'gemini-1.5-flash';
-  const IMAGE_MODEL = 'imagen-3.0-generate-001';
+  const TEXT_MODEL  = 'gemini-2.0-flash-lite';
+  const IMAGE_MODEL = 'imagen-3.0-fast-generate-001';
   const BASE        = 'https://generativelanguage.googleapis.com/v1beta';
 
   function key()      { return Config.get('GEMINI'); }
@@ -39,6 +39,7 @@ const Gemini = (() => {
 
   /* ── Imagen ── */
   async function generateImage(prompt, { aspectRatio = '1:1' } = {}) {
+    if (falKey()) return _generateImageFal(prompt, { aspectRatio });
     if (!key()) throw new Error('Gemini API key não configurada.');
     const res = await fetch(`${BASE}/models/${IMAGE_MODEL}:predict?key=${key()}`, {
       method: 'POST',
@@ -57,6 +58,34 @@ const Gemini = (() => {
     const mime = data?.predictions?.[0]?.mimeType || 'image/png';
     if (!b64) throw new Error('Nenhuma imagem gerada.');
     return `data:${mime};base64,${b64}`;
+  }
+
+  /* fal.ai FLUX.1 Schnell — ~$0.003/imagem, síncrono */
+  async function _generateImageFal(prompt, { aspectRatio = '1:1' } = {}) {
+    const sizeMap = {
+      '1:1':  'square_hd',
+      '9:16': 'portrait_16_9',
+      '16:9': 'landscape_16_9',
+      '4:3':  'landscape_4_3',
+      '3:4':  'portrait_4_3',
+    };
+    const image_size = sizeMap[aspectRatio] || 'square_hd';
+    const res = await fetch('https://fal.run/fal-ai/flux/schnell', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Key ${falKey()}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({ prompt, image_size, num_images: 1 })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.detail || err?.message || `fal.ai erro ${res.status}`);
+    }
+    const data = await res.json();
+    const url = data?.images?.[0]?.url;
+    if (!url) throw new Error('fal.ai: nenhuma imagem gerada.');
+    return url;
   }
 
   /* ── Vídeo via fal.ai (Wan 2.6 / Kling / LTX) ──

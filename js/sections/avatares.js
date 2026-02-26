@@ -6,7 +6,7 @@
 let _refImagesState = []; // { url, isNew, dataUrl? }
 
 // Todas as plataformas suportadas
-const PLATAFORMAS_AVATAR = ['instagram','tiktok','facebook','youtube','fansly','onlyfans','patreon','twitch','spotify'];
+const PLATAFORMAS_AVATAR = ['instagram','tiktok','facebook','youtube','fansly','onlyfans','patreon','twitch','spotify','vimeo','rumble','dailymotion'];
 
 // Categorias/tags predefinidas
 const CATEGORIAS_PRESET = ['SFW','NSFW','Anime','Cosplay','Realista','Lifestyle','Gaming','Music','Fitness','Art'];
@@ -106,7 +106,7 @@ function renderAvatarCard(a, isActive) {
         ${!isActive
           ? `<button class="btn btn-sm btn-secondary flex-1" onclick="setActiveAvatar('${a.id}')"><i class="fa-solid fa-star"></i> Ativar</button>`
           : '<span class="btn btn-sm btn-secondary flex-1 text-center" style="cursor:default;opacity:.5"><i class="fa-solid fa-star"></i> Ativo</span>'}
-        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarFanslyModal('${a.id}')" title="Fansly"><i class="fa-solid fa-dollar-sign" style="color:var(--pink)"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarMonetizacaoModal('${a.id}')" title="Monetização"><i class="fa-solid fa-coins" style="color:var(--yellow)"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openContasModal('${a.id}','${escHtml(a.nome)}')" title="Contas sociais"><i class="fa-solid fa-link"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarModal('${a.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-sm btn-danger btn-icon" onclick="confirmDeleteAvatar('${a.id}', this.dataset.nome)" data-nome="${escHtml(a.nome)}" title="Apagar"><i class="fa-solid fa-trash"></i></button>
@@ -547,17 +547,190 @@ async function saveAvatarFanslyStats(avatarId, mes, existingId) {
   }
 }
 
+/* ── Modal de Monetização unificado por Avatar ── */
+async function openAvatarMonetizacaoModal(avatarId) {
+  const a = app.getAvatares().find(x => String(x.id) === String(avatarId));
+  if (!a) return;
+
+  const plataformasMonetizacao = (a.plataformas || []).filter(p => ['fansly','onlyfans','patreon','twitch'].includes(p));
+  // Sempre mostrar pelo menos Fansly e OnlyFans como opções
+  const platsMostrar = [...new Set(['fansly', 'onlyfans', ...plataformasMonetizacao])];
+
+  const refs     = a?.imagens_referencia || [];
+  const avatarSrc = refs[0] || a?.imagem_url || null;
+
+  const body = `
+    <div style="background:linear-gradient(135deg,rgba(234,179,8,0.1),rgba(124,58,237,0.1));border:1px solid rgba(234,179,8,0.3);border-radius:12px;padding:14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+      <div style="width:44px;height:44px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center">
+        ${avatarSrc
+          ? `<img src="${escHtml(avatarSrc)}" style="width:100%;height:100%;object-fit:cover">`
+          : `<span style="font-size:1.6rem">${escHtml(a?.emoji || '🎭')}</span>`}
+      </div>
+      <div>
+        <div style="font-weight:700">${escHtml(a.nome)}</div>
+        <div style="font-size:.8rem;color:var(--yellow)"><i class="fa-solid fa-coins"></i> Gerir receitas por plataforma</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
+      <button class="btn btn-secondary" style="flex-direction:column;gap:6px;padding:16px 12px;height:auto;border-color:var(--pink);justify-content:center;align-items:center"
+        onclick="app.closeModal();openAvatarFanslyModal('${avatarId}')">
+        <i class="fa-solid fa-dollar-sign" style="color:var(--pink);font-size:1.4rem"></i>
+        <span style="font-weight:700">Fansly</span>
+        <span class="text-sm text-muted">Subs, receita, tips</span>
+      </button>
+
+      <button class="btn btn-secondary" style="flex-direction:column;gap:6px;padding:16px 12px;height:auto;border-color:var(--blue);justify-content:center;align-items:center"
+        onclick="app.closeModal();openAvatarOnlyfansModal('${avatarId}')">
+        <i class="fa-solid fa-heart" style="color:var(--blue);font-size:1.4rem"></i>
+        <span style="font-weight:700">OnlyFans</span>
+        <span class="text-sm text-muted">Subs, PPV, tips</span>
+      </button>
+
+      <button class="btn btn-secondary" style="flex-direction:column;gap:6px;padding:16px 12px;height:auto;border-color:#f96854;justify-content:center;align-items:center"
+        onclick="app.closeModal();app.navigate('monetizacao')">
+        <i class="fa-brands fa-patreon" style="color:#f96854;font-size:1.4rem"></i>
+        <span style="font-weight:700">Patreon</span>
+        <span class="text-sm text-muted">Gerir em Monetização</span>
+      </button>
+
+      <button class="btn btn-secondary" style="flex-direction:column;gap:6px;padding:16px 12px;height:auto;border-color:#9146ff;justify-content:center;align-items:center"
+        onclick="app.closeModal();app.navigate('monetizacao')">
+        <i class="fa-brands fa-twitch" style="color:#9146ff;font-size:1.4rem"></i>
+        <span style="font-weight:700">Twitch</span>
+        <span class="text-sm text-muted">Gerir em Monetização</span>
+      </button>
+    </div>
+
+    <div style="margin-top:14px;padding:10px;background:var(--bg-elevated);border-radius:8px;font-size:.82rem;color:var(--text-muted)">
+      <i class="fa-solid fa-info-circle" style="color:var(--accent)"></i>
+      Patreon e Twitch são globais (não por avatar). Fansly e OnlyFans são por avatar.
+    </div>`;
+
+  app.openModal(`Monetização — ${a.nome}`, body,
+    `<button class="btn btn-secondary" onclick="app.closeModal()">Fechar</button>`);
+}
+
+/* ── OnlyFans Stats por Avatar ── */
+async function openAvatarOnlyfansModal(avatarId) {
+  const a = app.getAvatares().find(x => String(x.id) === String(avatarId));
+  const avatarNome = a?.nome || '';
+  const refs       = a?.imagens_referencia || [];
+  const avatarSrc  = refs[0] || a?.imagem_url || null;
+
+  let statsHistorico = [];
+  const hoje     = new Date();
+  const mesAtual = hoje.toISOString().slice(0,7) + '-01';
+
+  if (DB.ready()) {
+    const { data } = await DB.getOnlyfansStats(avatarId);
+    statsHistorico = data || [];
+  }
+
+  const statMesAtual = statsHistorico.find(s => s.mes === mesAtual);
+
+  const body = `
+    <div style="background:linear-gradient(135deg,rgba(59,130,246,0.1),rgba(124,58,237,0.1));border:1px solid rgba(59,130,246,0.3);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+      <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center">
+        ${avatarSrc
+          ? `<img src="${escHtml(avatarSrc)}" style="width:100%;height:100%;object-fit:cover">`
+          : `<span style="font-size:1.8rem">${escHtml(a?.emoji || '🎭')}</span>`}
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:1.05rem">${escHtml(avatarNome)}</div>
+        <div style="font-size:.8rem;color:var(--blue)"><i class="fa-solid fa-heart"></i> OnlyFans</div>
+      </div>
+    </div>
+
+    <div style="font-weight:700;margin-bottom:12px">Mês atual — ${hoje.toLocaleDateString('pt-PT',{month:'long',year:'numeric'})}</div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Subscritores</label>
+        <input id="avof-subs" class="form-control" type="number" min="0" value="${statMesAtual?.subscribers||0}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Receita subscrições (€)</label>
+        <input id="avof-receita" class="form-control" type="number" min="0" step="0.01" value="${statMesAtual?.receita||0}">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Tips (€)</label>
+        <input id="avof-tips" class="form-control" type="number" min="0" step="0.01" value="${statMesAtual?.tips||0}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">PPV — Pay Per View (€)</label>
+        <input id="avof-ppv" class="form-control" type="number" min="0" step="0.01" value="${statMesAtual?.ppv_receita||0}">
+      </div>
+    </div>
+
+    ${statsHistorico.length > 0 ? `
+      <div style="margin-top:16px">
+        <div style="font-weight:700;margin-bottom:10px">Histórico OnlyFans</div>
+        <div style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto">
+          ${statsHistorico.map(s => {
+            const d = new Date(s.mes);
+            const recTotal = (parseFloat(s.receita)||0) + (parseFloat(s.tips)||0) + (parseFloat(s.ppv_receita)||0);
+            return `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg-elevated);border-radius:8px">
+                <span style="font-size:.85rem">${d.toLocaleDateString('pt-PT',{month:'long',year:'numeric'})}</span>
+                <div style="display:flex;gap:16px;font-size:.82rem">
+                  <span style="color:var(--text-muted)"><i class="fa-solid fa-users"></i> ${(s.subscribers||0).toLocaleString()}</span>
+                  <span style="color:var(--blue);font-weight:700">€${recTotal.toFixed(2)}</span>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>
+    ` : ''}`;
+
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveAvatarOnlyfansStats('${avatarId}','${mesAtual}','${statMesAtual?.id||''}')">
+      <i class="fa-solid fa-floppy-disk"></i> Guardar
+    </button>`;
+
+  app.openModal(`OnlyFans — ${avatarNome}`, body, footer);
+}
+
+async function saveAvatarOnlyfansStats(avatarId, mes, existingId) {
+  const subscribers = parseInt(document.getElementById('avof-subs')?.value)||0;
+  const receita     = parseFloat(document.getElementById('avof-receita')?.value)||0;
+  const tips        = parseFloat(document.getElementById('avof-tips')?.value)||0;
+  const ppv_receita = parseFloat(document.getElementById('avof-ppv')?.value)||0;
+
+  const payload = { avatar_id: avatarId, mes, subscribers, receita, tips, ppv_receita };
+  if (existingId) payload.id = existingId;
+
+  if (DB.ready()) {
+    const { error } = await DB.upsertOnlyfansStats(payload);
+    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+  }
+
+  app.toast('Stats OnlyFans guardadas!', 'success');
+  app.closeModal();
+  const hash = location.hash.replace('#', '');
+  const content = document.getElementById('content');
+  if (content) {
+    if (hash === 'monetizacao') renderMonetizacao(content);
+    else if (hash === 'avatares') renderAvatares(content);
+  }
+}
+
 /* ── Contas de redes sociais ── */
 const PLATAFORMAS_INFO = {
-  instagram: { label: 'Instagram',  icon: 'fa-brands fa-instagram icon-instagram', placeholder_id: 'Ex: 17841400000000000', placeholder_user: 'Ex: @minha_conta' },
-  tiktok:    { label: 'TikTok',     icon: 'fa-brands fa-tiktok icon-tiktok',       placeholder_id: 'Ex: 6784563210987654',   placeholder_user: 'Ex: @minha_conta' },
-  facebook:  { label: 'Facebook',   icon: 'fa-brands fa-facebook icon-facebook',   placeholder_id: 'Ex: 123456789012345',    placeholder_user: 'Ex: Nome da Página' },
-  youtube:   { label: 'YouTube',    icon: 'fa-brands fa-youtube icon-youtube',     placeholder_id: 'Ex: UCxxxxxxxxxxxxxx',   placeholder_user: 'Ex: @meucanal' },
-  fansly:    { label: 'Fansly',     icon: 'fa-solid fa-dollar-sign icon-fansly',   placeholder_id: 'Ex: fansly_id_123',      placeholder_user: 'Ex: @minhaconta' },
-  onlyfans:  { label: 'OnlyFans',   icon: 'fa-solid fa-fire icon-onlyfans',        placeholder_id: 'Ex: of_id_123',          placeholder_user: 'Ex: @minhaconta' },
-  patreon:   { label: 'Patreon',    icon: 'fa-brands fa-patreon icon-patreon',     placeholder_id: 'Ex: patreon_id_123',     placeholder_user: 'Ex: minhapagina' },
-  twitch:    { label: 'Twitch',     icon: 'fa-brands fa-twitch icon-twitch',       placeholder_id: 'Ex: twitch_id_123',      placeholder_user: 'Ex: meucanal' },
-  spotify:   { label: 'Spotify',    icon: 'fa-brands fa-spotify icon-spotify',     placeholder_id: 'Ex: spotify_id_123',     placeholder_user: 'Ex: Artista' },
+  instagram:   { label: 'Instagram',   icon: 'fa-brands fa-instagram icon-instagram',   placeholder_id: 'Ex: 17841400000000000', placeholder_user: 'Ex: @minha_conta' },
+  tiktok:      { label: 'TikTok',      icon: 'fa-brands fa-tiktok icon-tiktok',         placeholder_id: 'Ex: 6784563210987654',   placeholder_user: 'Ex: @minha_conta' },
+  facebook:    { label: 'Facebook',    icon: 'fa-brands fa-facebook icon-facebook',     placeholder_id: 'Ex: 123456789012345',    placeholder_user: 'Ex: Nome da Página' },
+  youtube:     { label: 'YouTube',     icon: 'fa-brands fa-youtube icon-youtube',       placeholder_id: 'Ex: UCxxxxxxxxxxxxxx',   placeholder_user: 'Ex: @meucanal' },
+  fansly:      { label: 'Fansly',      icon: 'fa-solid fa-dollar-sign icon-fansly',     placeholder_id: 'Ex: fansly_id_123',      placeholder_user: 'Ex: @minhaconta' },
+  onlyfans:    { label: 'OnlyFans',    icon: 'fa-solid fa-fire icon-onlyfans',          placeholder_id: 'Ex: of_id_123',          placeholder_user: 'Ex: @minhaconta' },
+  patreon:     { label: 'Patreon',     icon: 'fa-brands fa-patreon icon-patreon',       placeholder_id: 'Ex: patreon_id_123',     placeholder_user: 'Ex: minhapagina' },
+  twitch:      { label: 'Twitch',      icon: 'fa-brands fa-twitch icon-twitch',         placeholder_id: 'Ex: twitch_id_123',      placeholder_user: 'Ex: meucanal' },
+  spotify:     { label: 'Spotify',     icon: 'fa-brands fa-spotify icon-spotify',       placeholder_id: 'Ex: spotify_id_123',     placeholder_user: 'Ex: Artista' },
+  vimeo:       { label: 'Vimeo',       icon: 'fa-brands fa-vimeo-v icon-vimeo',         placeholder_id: 'Ex: vimeo.com/user',     placeholder_user: 'Ex: @meucanal' },
+  rumble:      { label: 'Rumble',      icon: 'fa-solid fa-video icon-rumble',           placeholder_id: 'Ex: rumble.com/user',    placeholder_user: 'Ex: meucanal' },
+  dailymotion: { label: 'Dailymotion', icon: 'fa-solid fa-play icon-dailymotion',       placeholder_id: 'Ex: dailymotion.com/user', placeholder_user: 'Ex: meucanal' },
 };
 
 async function openContasModal(avatarId, avatarNome) {

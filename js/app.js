@@ -6,7 +6,7 @@ const app = (() => {
   const sections = {
     dashboard:      { title: 'Dashboard',        fn: 'renderDashboard' },
     avatares:       { title: 'Avatares',          fn: 'renderAvatares' },
-    youtube:        { title: 'Canais YouTube',    fn: 'renderYoutube' },
+    youtube:        { title: 'Canais de Vídeo',   fn: 'renderYoutube' },
     musicos:        { title: 'Músicos & Bandas',  fn: 'renderMusicos' },
     criar:          { title: 'Criar Post',        fn: 'renderCriarPost' },
     fila:           { title: 'Fila / Agenda',     fn: 'renderFila' },
@@ -270,15 +270,18 @@ const app = (() => {
 
   function platformIcon(p) {
     const map = {
-      instagram: 'fa-brands fa-instagram icon-instagram',
-      tiktok:    'fa-brands fa-tiktok icon-tiktok',
-      facebook:  'fa-brands fa-facebook icon-facebook',
-      youtube:   'fa-brands fa-youtube icon-youtube',
-      fansly:    'fa-solid fa-dollar-sign icon-fansly',
-      onlyfans:  'fa-solid fa-fire icon-onlyfans',
-      patreon:   'fa-brands fa-patreon icon-patreon',
-      twitch:    'fa-brands fa-twitch icon-twitch',
-      spotify:   'fa-brands fa-spotify icon-spotify',
+      instagram:   'fa-brands fa-instagram icon-instagram',
+      tiktok:      'fa-brands fa-tiktok icon-tiktok',
+      facebook:    'fa-brands fa-facebook icon-facebook',
+      youtube:     'fa-brands fa-youtube icon-youtube',
+      fansly:      'fa-solid fa-dollar-sign icon-fansly',
+      onlyfans:    'fa-solid fa-fire icon-onlyfans',
+      patreon:     'fa-brands fa-patreon icon-patreon',
+      twitch:      'fa-brands fa-twitch icon-twitch',
+      spotify:     'fa-brands fa-spotify icon-spotify',
+      vimeo:       'fa-brands fa-vimeo-v icon-vimeo',
+      rumble:      'fa-solid fa-video icon-rumble',
+      dailymotion: 'fa-solid fa-play icon-dailymotion',
     };
     return `<i class="${map[p] || 'fa-solid fa-globe'}"></i>`;
   }
@@ -288,6 +291,7 @@ const app = (() => {
       instagram: 'Instagram', tiktok: 'TikTok', facebook: 'Facebook',
       youtube: 'YouTube', fansly: 'Fansly', onlyfans: 'OnlyFans',
       patreon: 'Patreon', twitch: 'Twitch', spotify: 'Spotify',
+      vimeo: 'Vimeo', rumble: 'Rumble', dailymotion: 'Dailymotion',
     };
     return labels[p] || p.charAt(0).toUpperCase() + p.slice(1);
   }
