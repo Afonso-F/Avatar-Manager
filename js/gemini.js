@@ -1,63 +1,61 @@
 /* ============================================================
-   gemini.js — Gemini API (texto + Imagen) + fal.ai (Wan 2.6 / vídeo)
+   gemini.js — Mistral AI (texto + visão) + fal.ai (imagens / vídeo)
    ============================================================ */
 const Gemini = (() => {
-  const TEXT_MODEL  = 'gemini-1.5-flash';
-  const IMAGE_MODEL = 'imagen-3.0-fast-generate-001';
-  const BASE        = 'https://generativelanguage.googleapis.com/v1beta';
+  const TEXT_MODEL   = 'mistral-small-latest';   // mais barato para texto
+  const VISION_MODEL = 'pixtral-12b-2409';        // suporta imagens (visão)
+  const BASE         = 'https://api.mistral.ai/v1';
 
-  function key()      { return Config.get('GEMINI'); }
+  function key()      { return Config.get('MISTRAL'); }
   function falKey()   { return Config.get('FAL_AI'); }
   function vidModel() { return Config.get('VIDEO_MODEL') || 'fal-ai/wan/v2.1/t2v-480p'; }
 
-  /* ── Texto ── */
+  /* ── Texto / Visão ── */
   async function generateText(prompt, { temperature = 0.8, maxTokens = 1024, images = [] } = {}) {
-    if (!key()) throw new Error('Gemini API key não configurada.');
-    const parts = [{ text: prompt }];
-    if (images && images.length) {
-      images.slice(0, 3).forEach(dataUrl => {
-        const [meta, b64] = dataUrl.split(',');
-        const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
-        parts.push({ inlineData: { mimeType, data: b64 } });
-      });
+    if (!key()) throw new Error('Mistral API key não configurada.');
+
+    const hasImages = images && images.length > 0;
+    const model = hasImages ? VISION_MODEL : TEXT_MODEL;
+
+    let content;
+    if (hasImages) {
+      content = [
+        { type: 'text', text: prompt },
+        ...images.slice(0, 3).map(dataUrl => ({
+          type: 'image_url',
+          image_url: { url: dataUrl }
+        }))
+      ];
+    } else {
+      content = prompt;
     }
-    const res = await fetch(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
+
+    const res = await fetch(`${BASE}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${key()}`
+      },
       body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: { temperature, maxOutputTokens: maxTokens }
+        model,
+        messages: [{ role: 'user', content }],
+        temperature,
+        max_tokens: maxTokens
       })
     });
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err?.error?.message || `Erro ${res.status}`);
+      throw new Error(err?.message || `Erro ${res.status}`);
     }
     const data = await res.json();
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return data?.choices?.[0]?.message?.content || '';
   }
 
-  /* ── Imagen ── */
+  /* ── Imagem via fal.ai (Mistral não gera imagens) ── */
   async function generateImage(prompt, { aspectRatio = '1:1' } = {}) {
-    if (falKey()) return _generateImageFal(prompt, { aspectRatio });
-    if (!key()) throw new Error('Gemini API key não configurada.');
-    const res = await fetch(`${BASE}/models/${IMAGE_MODEL}:predict?key=${key()}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        instances: [{ prompt }],
-        parameters: { sampleCount: 1, aspectRatio }
-      })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err?.error?.message || `Erro ${res.status}`);
-    }
-    const data = await res.json();
-    const b64  = data?.predictions?.[0]?.bytesBase64Encoded;
-    const mime = data?.predictions?.[0]?.mimeType || 'image/png';
-    if (!b64) throw new Error('Nenhuma imagem gerada.');
-    return `data:${mime};base64,${b64}`;
+    if (!falKey()) throw new Error('Chave fal.ai necessária para gerar imagens. Configura em Configurações → fal.ai.');
+    return _generateImageFal(prompt, { aspectRatio });
   }
 
   /* fal.ai FLUX.1 Schnell — ~$0.003/imagem, síncrono */
@@ -89,15 +87,11 @@ const Gemini = (() => {
   }
 
   /* ── Vídeo via fal.ai (Wan 2.6 / Kling / LTX) ──
-     Devolve um objecto { url, isExternal }
-     url pode ser uma URL pública (fal.ai) ou data URL (Veo 2 legado)  */
+     Devolve um objecto { url, isExternal } */
   async function generateVideo(prompt, { aspectRatio = '9:16', onProgress } = {}) {
     const fKey = falKey();
-    if (fKey) {
-      return _generateVideoFal(prompt, { aspectRatio, onProgress, fKey });
-    }
-    // Fallback: Veo 2 via Gemini (legado)
-    return _generateVideoVeo(prompt, { aspectRatio, onProgress });
+    if (!fKey) throw new Error('Chave fal.ai necessária para gerar vídeos. Configura em Configurações → fal.ai.');
+    return _generateVideoFal(prompt, { aspectRatio, onProgress, fKey });
   }
 
   /* fal.ai Queue API */
@@ -117,7 +111,7 @@ const Gemini = (() => {
       const err = await startRes.json().catch(() => ({}));
       throw new Error(err?.detail || err?.message || `fal.ai erro ${startRes.status}`);
     }
-    const { request_id, status_url, response_url } = await startRes.json();
+    const { request_id, status_url } = await startRes.json();
     if (!request_id) throw new Error('fal.ai: resposta de queue inválida.');
 
     // Poll a cada 6s, até 10 min (100 tentativas)
@@ -148,40 +142,6 @@ const Gemini = (() => {
       // IN_QUEUE ou IN_PROGRESS — continuar
     }
     throw new Error('Timeout: fal.ai demorou mais de 10 minutos.');
-  }
-
-  /* Veo 2 via Gemini (legado, sem chave fal.ai) */
-  async function _generateVideoVeo(prompt, { aspectRatio, onProgress }) {
-    if (!key()) throw new Error('Nenhuma chave configurada para geração de vídeo.');
-    const VEO = 'veo-002';
-    const startRes = await fetch(`${BASE}/models/${VEO}:predictLongRunning?key=${key()}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        instances: [{ prompt }],
-        parameters: { aspectRatio, sampleCount: 1 }
-      })
-    });
-    if (!startRes.ok) {
-      const err = await startRes.json().catch(() => ({}));
-      throw new Error(err?.error?.message || `Veo erro ${startRes.status}`);
-    }
-    const { name: operationName } = await startRes.json();
-    if (!operationName) throw new Error('Veo 2: operação inválida.');
-
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 10000));
-      if (onProgress) onProgress(i + 1, 30);
-      const pollRes = await fetch(`${BASE}/${operationName}?key=${key()}`);
-      if (!pollRes.ok) continue;
-      const data = await pollRes.json();
-      if (!data.done) continue;
-      if (data.error) throw new Error(data.error.message || 'Veo 2 erro.');
-      const b64 = data.response?.predictions?.[0]?.bytesBase64Encoded;
-      if (!b64) throw new Error('Veo 2: resposta inválida.');
-      return { url: `data:video/mp4;base64,${b64}`, isExternal: false };
-    }
-    throw new Error('Timeout: Veo 2 demorou mais de 5 minutos.');
   }
 
   /* ── Legenda por plataforma ── */
@@ -236,7 +196,7 @@ Formato: apenas as hashtags separadas por espaço, com #, sem texto extra.
     return generateText(prompt, { temperature: 0.5 });
   }
 
-  /* Sugestão de hashtags baseada em imagem (Gemini Vision) */
+  /* Sugestão de hashtags baseada em imagem (Pixtral Vision) */
   async function suggestHashtagsFromImage(imageDataUrl, nicho = 'geral') {
     const prompt = `
 Analisa esta imagem e gera 20 hashtags relevantes para Instagram/TikTok

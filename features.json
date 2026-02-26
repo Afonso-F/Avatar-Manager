@@ -1,5 +1,5 @@
 {
-  "gemini_ai": true,
+  "mistral_ai": true,
   "multi_platform": true,
   "auto_publish": true,
   "analytics": true,
