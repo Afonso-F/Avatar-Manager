@@ -15,20 +15,20 @@ function renderConfiguracoes(container) {
       </button>
     </div>
 
-    <!-- Gemini -->
+    <!-- Mistral -->
     <div class="settings-section">
-      <div class="settings-section-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Google Gemini AI</div>
+      <div class="settings-section-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Mistral AI</div>
       <div class="form-group mb-0">
-        <label class="form-label">API Key <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-sm" style="color:var(--accent)">(obter chave)</a></label>
+        <label class="form-label">API Key <a href="https://console.mistral.ai/api-keys/" target="_blank" class="text-sm" style="color:var(--accent)">(obter chave)</a></label>
         <div class="key-field">
-          <input id="cfg-gemini" class="form-control" type="password" value="${cfg.GEMINI}" placeholder="AIza…">
-          <button class="key-toggle" onclick="toggleKeyVisibility('cfg-gemini', this)"><i class="fa-solid fa-eye"></i></button>
+          <input id="cfg-mistral" class="form-control" type="password" value="${cfg.MISTRAL}" placeholder="…">
+          <button class="key-toggle" onclick="toggleKeyVisibility('cfg-mistral', this)"><i class="fa-solid fa-eye"></i></button>
         </div>
-        <div class="form-hint">Usada para gerar legendas, hashtags e imagens (Imagen 3)</div>
+        <div class="form-hint">Usada para gerar legendas, hashtags e análise de imagens (Pixtral Vision)</div>
       </div>
       <div class="mt-2">
-        <button class="btn btn-sm btn-secondary" onclick="testGemini()"><i class="fa-solid fa-flask"></i> Testar conexão</button>
-        <span id="gemini-test-result" class="text-sm ml-1"></span>
+        <button class="btn btn-sm btn-secondary" onclick="testMistral()"><i class="fa-solid fa-flask"></i> Testar conexão</button>
+        <span id="mistral-test-result" class="text-sm ml-1"></span>
       </div>
     </div>
 
@@ -130,7 +130,7 @@ function renderConfiguracoes(container) {
             <option value="fal-ai/kling-video/v2.1/pro/text-to-video" ${cfg.VIDEO_MODEL==='fal-ai/kling-video/v2.1/pro/text-to-video'?'selected':''}>Kling v2.1 Pro</option>
             <option value="fal-ai/ltx-video" ${cfg.VIDEO_MODEL==='fal-ai/ltx-video'?'selected':''}>LTX Video</option>
           </select>
-          <div class="form-hint">Se não configurares o fal.ai, usa Veo 2 (Google) como fallback</div>
+          <div class="form-hint">Obrigatório para geração de imagens e vídeos (Mistral não gera imagens)</div>
         </div>
       </div>
       <div class="mt-2">
@@ -148,7 +148,7 @@ function renderConfiguracoes(container) {
         Adiciona as tuas API keys como <strong>Secrets</strong> no repositório GitHub.
       </p>
       <div class="flex gap-1 flex-wrap">
-        ${['GEMINI_API_KEY','SUPABASE_URL','SUPABASE_KEY','INSTAGRAM_TOKEN','TIKTOK_TOKEN','FACEBOOK_TOKEN','YOUTUBE_TOKEN'].map(k =>
+        ${['MISTRAL_API_KEY','SUPABASE_URL','SUPABASE_KEY','INSTAGRAM_TOKEN','TIKTOK_TOKEN','FACEBOOK_TOKEN','YOUTUBE_TOKEN'].map(k =>
           `<code style="background:var(--bg-elevated);padding:4px 8px;border-radius:4px;font-size:.8rem;color:var(--accent)">${k}</code>`
         ).join('')}
       </div>
@@ -173,7 +173,7 @@ function toggleKeyVisibility(id, btn) {
 
 function saveAllConfigs() {
   const map = {
-    GEMINI:       'cfg-gemini',
+    MISTRAL:      'cfg-mistral',
     SUPABASE_URL: 'cfg-supabase-url',
     SUPABASE_KEY: 'cfg-supabase-key',
     INSTAGRAM:    'cfg-instagram',
@@ -193,19 +193,19 @@ function saveAllConfigs() {
   app.toast('Configurações guardadas!', 'success');
 }
 
-async function testGemini() {
-  const key = document.getElementById('cfg-gemini')?.value.trim();
+async function testMistral() {
+  const key = document.getElementById('cfg-mistral')?.value.trim();
   if (!key) { app.toast('Introduz uma API key primeiro', 'warning'); return; }
-  Config.set('GEMINI', key);
-  const el = document.getElementById('gemini-test-result');
+  Config.set('MISTRAL', key);
+  const el = document.getElementById('mistral-test-result');
   el.textContent = 'A testar…';
   try {
     const text = await Gemini.generateText('Responde com "OK" apenas.', { maxTokens: 10 });
     el.innerHTML = '<span style="color:var(--green)"><i class="fa-solid fa-circle-check"></i> Ligado!</span>';
-    app.toast('Gemini OK!', 'success');
+    app.toast('Mistral OK!', 'success');
   } catch (e) {
     el.innerHTML = `<span style="color:var(--red)"><i class="fa-solid fa-circle-xmark"></i> Erro: ${e.message}</span>`;
-    app.toast('Erro Gemini: ' + e.message, 'error');
+    app.toast('Erro Mistral: ' + e.message, 'error');
   }
 }
 

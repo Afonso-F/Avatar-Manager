@@ -3,7 +3,7 @@
    ============================================================ */
 const Config = (() => {
   const KEYS = {
-    GEMINI:        'as_gemini_key',
+    MISTRAL:       'as_mistral_key',
     SUPABASE_URL:  'as_supabase_url',
     SUPABASE_KEY:  'as_supabase_key',
     INSTAGRAM:     'as_instagram_token',
@@ -38,7 +38,7 @@ const Config = (() => {
   }
 
   function isReady() {
-    return !!(get('GEMINI') && get('SUPABASE_URL') && get('SUPABASE_KEY'));
+    return !!(get('MISTRAL') && get('SUPABASE_URL') && get('SUPABASE_KEY'));
   }
 
   return { get, set, getAll, isReady, KEYS };
