@@ -286,7 +286,7 @@ async function guardarPromptBib(id) {
 
   if (DB.ready()) {
     const { data: saved, error } = await DB.upsertPromptEntry(entry);
-    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
     if (id) {
       _bibState.items = (_bibState.items || []).map(i => String(i.id) === String(id) ? { ...i, ...entry } : i);
     } else {
@@ -472,7 +472,7 @@ async function confirmarSaveToLibrary(tipo) {
 
   if (DB.ready()) {
     const { error } = await DB.upsertPromptEntry(entry);
-    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
   }
 
   app.toast(`Prompt "${titulo}" guardado na biblioteca!`, 'success');

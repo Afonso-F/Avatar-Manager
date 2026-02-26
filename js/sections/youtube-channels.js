@@ -394,7 +394,7 @@ async function saveYoutubeChannel(id) {
 
   if (DB.ready()) {
     const { error } = await DB.upsertYoutubeChannel(payload);
-    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
   }
 
   app.toast(id ? 'Canal atualizado!' : 'Canal criado!', 'success');

@@ -369,7 +369,7 @@ async function saveTemplate() {
   const tpl = { nome, ...window._tplData };
   if (DB.ready()) {
     const { error } = await DB.upsertPostTemplate(tpl);
-    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
   }
   app.toast(`Template "${nome}" guardado!`, 'success');
   app.closeModal();
@@ -776,7 +776,7 @@ async function savePost(forceStatus) {
 
   if (DB.ready()) {
     const { error } = await DB.upsertPost(post);
-    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + (error?.message || error?.details || JSON.stringify(error)), 'error'); return; }
   }
 
   app.toast(status === 'rascunho' ? 'Rascunho guardado!' : 'Post agendado!', 'success');
