@@ -527,7 +527,7 @@ async function saveAvatar(id) {
       if (refErr) console.warn('Erro ao guardar imagens de referência:', refErr);
     }
   } else {
-    avatar.imagens_referencia = _refImagesState.filter(i => !i.isNew).map(i => i.url);
+    avatar.imagens_referencia = _refImagesState.map(i => i.dataUrl || i.url).filter(Boolean);
     const list = app.getAvatares();
     if (id) {
       const idx = list.findIndex(x => String(x.id) === String(id));
