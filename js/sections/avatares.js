@@ -131,6 +131,12 @@ function openAvatarModal(id) {
   const avatarCats = Array.isArray(a?.categorias) ? a.categorias : [];
 
   const body = `
+    <div class="prompts-toggle-bar">
+      <button id="prompts-toggle-btn-avatar" class="btn btn-sm btn-ghost" onclick="PromptsLibrary.toggle('avatar')">
+        <i class="fa-solid fa-book-open"></i> Biblioteca de prompts
+      </button>
+    </div>
+    ${PromptsLibrary.renderAvatarPanel()}
     <div class="form-group">
       <label class="form-label">Nome *</label>
       <input id="av-nome" class="form-control" value="${escHtml(a?.nome || '')}" placeholder="Ex: Luna">
@@ -158,7 +164,7 @@ function openAvatarModal(id) {
       <div class="form-hint mt-1">Clica para selecionar/deselecionar</div>
     </div>
     <div class="form-group">
-      <label class="form-label">Prompt base (personalidade para o Gemini)</label>
+      <label class="form-label">Prompt base (personalidade para a IA)</label>
       <textarea id="av-prompt" class="form-control" rows="3" placeholder="Descreve o estilo, tom e personalidade do avatar…">${escHtml(a?.prompt_base || '')}</textarea>
     </div>
     <div class="form-group">

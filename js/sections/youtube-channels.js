@@ -171,6 +171,12 @@ async function openYoutubeModal(id) {
   const platAtual = c?.plataforma || 'youtube';
 
   const body = `
+    <div class="prompts-toggle-bar">
+      <button id="prompts-toggle-btn-youtube" class="btn btn-sm btn-ghost" onclick="PromptsLibrary.toggle('youtube')">
+        <i class="fa-solid fa-book-open"></i> Biblioteca de prompts
+      </button>
+    </div>
+    ${PromptsLibrary.renderYoutubePanel()}
     <div class="form-group">
       <label class="form-label">Plataforma *</label>
       <div class="platform-toggles" id="vp-platforms">

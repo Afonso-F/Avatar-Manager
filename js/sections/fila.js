@@ -2,6 +2,7 @@
    sections/fila.js — Fila / Agenda
    ============================================================ */
 let _filaState = { tab: 'agendado', avatarFilter: '', page: 0, view: 'lista' };
+let _draggedPostId = null;
 const FILA_PAGE_SIZE = 10;
 
 async function renderFila(container) {
@@ -115,9 +116,10 @@ function renderFilaList() {
   }
 
   const avatares = _filaState.avatares || [];
-  listEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">
+  listEl.innerHTML = `<div id="fila-drag-list" style="display:flex;flex-direction:column;gap:10px">
     ${paginated.map(p => renderPostCard(p, avatares)).join('')}
   </div>`;
+  _initDragDrop();
 
   const totalPages = Math.ceil(total / FILA_PAGE_SIZE);
   if (!pagEl || totalPages <= 1) { if (pagEl) pagEl.innerHTML = ''; return; }
@@ -181,7 +183,8 @@ function renderPostCard(p, avatares) {
   const av       = avatares.find(a => String(a.id) === String(p.avatar_id));
   const platforms = (p.plataformas || []).map(pl => app.platformIcon(pl)).join(' ');
   return `
-    <div class="post-card">
+    <div class="post-card" draggable="true" data-post-id="${p.id}">
+      <div class="post-drag-handle" title="Arrastar para reordenar"><i class="fa-solid fa-grip-vertical"></i></div>
       <div class="post-thumb">
         ${p.imagem_url ? `<img src="${p.imagem_url}" alt="">` : '<i class="fa-regular fa-image"></i>'}
       </div>
@@ -222,6 +225,66 @@ function renderKanbanCard(p, avatares) {
 
 function setFilaPage(p) {
   _filaState.page = p;
+  renderFilaList();
+}
+
+/* ── Drag & Drop ── */
+function _initDragDrop() {
+  const cards = document.querySelectorAll('.post-card[data-post-id]');
+  cards.forEach(card => {
+    card.addEventListener('dragstart', e => {
+      _draggedPostId = card.dataset.postId;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => card.classList.add('dragging'), 0);
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      document.querySelectorAll('.post-card.drag-over').forEach(c => c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (card.dataset.postId !== _draggedPostId) card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', async e => {
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      const targetId = card.dataset.postId;
+      if (!_draggedPostId || _draggedPostId === targetId) return;
+      await _swapPostOrder(_draggedPostId, targetId);
+      _draggedPostId = null;
+    });
+  });
+}
+
+async function _swapPostOrder(idA, idB) {
+  const posts = _filaState.allPosts || [];
+  const postA = posts.find(p => String(p.id) === String(idA));
+  const postB = posts.find(p => String(p.id) === String(idB));
+  if (!postA || !postB) return;
+
+  // Trocar datas se ambos as tiverem; caso contrário trocar posições no array
+  const timeA = postA.agendado_para;
+  const timeB = postB.agendado_para;
+
+  if (timeA && timeB) {
+    postA.agendado_para = timeB;
+    postB.agendado_para = timeA;
+    if (DB.ready()) {
+      await Promise.all([
+        DB.upsertPost({ id: idA, agendado_para: timeB }),
+        DB.upsertPost({ id: idB, agendado_para: timeA }),
+      ]);
+    }
+  } else {
+    // Sem datas: apenas trocar posições no array local
+    const iA = posts.findIndex(p => String(p.id) === String(idA));
+    const iB = posts.findIndex(p => String(p.id) === String(idB));
+    if (iA >= 0 && iB >= 0) [posts[iA], posts[iB]] = [posts[iB], posts[iA]];
+  }
+
+  app.toast('Ordem atualizada!', 'success');
   renderFilaList();
 }
 
