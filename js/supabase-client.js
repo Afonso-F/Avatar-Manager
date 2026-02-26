@@ -102,9 +102,11 @@ const DB = (() => {
   }
 
   /* ── YouTube Channels ── */
-  async function getYoutubeChannels() {
+  async function getYoutubeChannels({ avatar_id } = {}) {
     if (!_client) return { data: [], error: 'not connected' };
-    return _client.from('youtube_channels').select('*').order('nome');
+    let q = _client.from('youtube_channels').select('*').order('nome');
+    if (avatar_id) q = q.eq('avatar_id', avatar_id);
+    return q;
   }
 
   async function upsertYoutubeChannel(channel) {
@@ -246,6 +248,29 @@ const DB = (() => {
 
     const { data: urlData } = _client.storage.from('avatar-references').getPublicUrl(path);
     return { url: urlData?.publicUrl };
+  }
+
+  async function uploadYoutubeReferenceImage(dataUrl, channelId) {
+    if (!_client) return { error: 'not connected' };
+    const [meta, b64] = dataUrl.split(',');
+    const mime = meta.match(/:(.*?);/)[1];
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mime });
+    const ext  = mime.split('/')[1]?.split('+')[0] || 'jpg';
+    const path = `youtube/${channelId}/${Date.now()}.${ext}`;
+
+    const { error } = await _client.storage.from('avatar-references').upload(path, blob, { contentType: mime, upsert: false });
+    if (error) return { error };
+
+    const { data: urlData } = _client.storage.from('avatar-references').getPublicUrl(path);
+    return { url: urlData?.publicUrl };
+  }
+
+  async function updateYoutubeRefImages(id, urls) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('youtube_channels').update({ imagens_referencia: urls }).eq('id', id);
   }
 
   /* Upload de vídeo gerado/carregado para um post */
@@ -446,5 +471,5 @@ const DB = (() => {
     }
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage, getOnlyfansStats, upsertOnlyfansStats, getPatreonStats, upsertPatreonStats, getTwitchStats, upsertTwitchStats, getAfiliados, upsertAfiliado, deleteAfiliado, getVendasDiretas, upsertVendaDireta, deleteVendaDireta };
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, updateYoutubeRefImages, uploadYoutubeReferenceImage, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage, getOnlyfansStats, upsertOnlyfansStats, getPatreonStats, upsertPatreonStats, getTwitchStats, upsertTwitchStats, getAfiliados, upsertAfiliado, deleteAfiliado, getVendasDiretas, upsertVendaDireta, deleteVendaDireta };
 })();

@@ -2,6 +2,9 @@
    sections/youtube-channels.js — Canais de Vídeo (multi-plataforma)
    ============================================================ */
 
+// Estado das imagens de referência no modal de canal
+let _ytRefImagesState = []; // { url, isNew, dataUrl? }
+
 const VIDEO_PLATAFORMAS = {
   youtube:     { label: 'YouTube',     color: '#ff0000', icon: 'fa-brands fa-youtube',      badge: 'badge-red',    rpm_label: 'RPM AdSense' },
   twitch:      { label: 'Twitch',      color: '#9146ff', icon: 'fa-brands fa-twitch',       badge: 'badge-purple', rpm_label: 'Receita por sub' },
@@ -160,17 +163,55 @@ function renderYoutubeCard(c) {
 }
 
 /* ── Modal Criar/Editar Canal ── */
-async function openYoutubeModal(id) {
-  let canais = [];
+async function openYoutubeModal(id, preAvatarId = '') {
+  let canais = [], avatares = app.getAvatares();
   if (DB.ready()) {
     const { data } = await DB.getYoutubeChannels();
     canais = data || [];
+    if (!avatares.length) {
+      const { data: avData } = await DB.getAvatares();
+      avatares = avData || [];
+      app.setAvatares(avatares);
+    }
   }
   const c = id ? canais.find(x => String(x.id) === String(id)) : null;
   const isNew = !c;
   const platAtual = c?.plataforma || 'youtube';
 
+  _ytRefImagesState = (c?.imagens_referencia || []).map(url => ({ url, isNew: false }));
+
+  const avatarOpts = avatares.map(a =>
+    `<option value="${a.id}" ${String(c?.avatar_id || preAvatarId) === String(a.id) ? 'selected' : ''}>${a.emoji || '🎭'} ${a.nome}</option>`
+  ).join('');
+
   const body = `
+    <div class="concept-toolbar">
+      <button id="prompts-toggle-btn-youtube" class="btn btn-sm btn-ghost" onclick="PromptsLibrary.toggle('youtube')">
+        <i class="fa-solid fa-book-open"></i> Biblioteca
+      </button>
+      <button id="concept-toggle-btn-youtube" class="btn btn-sm btn-ghost" onclick="_toggleConceptBar('youtube')">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Descrever com IA
+      </button>
+    </div>
+    ${PromptsLibrary.renderYoutubePanel()}
+    <div class="concept-panel" id="concept-panel-youtube">
+      <div class="concept-panel-label"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent)"></i> Descreve o teu canal — a IA preenche tudo</div>
+      <textarea id="concept-text-youtube" class="form-control" rows="3"
+        placeholder="Ex: Canal de tutoriais de Python para iniciantes, vídeos curtos e directos, foco em automação e IA no dia-a-dia…"></textarea>
+      <div class="flex items-center gap-2 mt-2">
+        <button class="btn btn-sm btn-primary" onclick="gerarCanalDeConceito()">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA
+        </button>
+        <span id="concept-progress-youtube" class="text-sm" style="color:var(--accent)"></span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Avatar associado</label>
+      <select id="yt-avatar-id" class="form-control">
+        <option value="">Sem avatar associado</option>
+        ${avatarOpts}
+      </select>
+    </div>
     <div class="form-group">
       <label class="form-label">Plataforma *</label>
       <div class="platform-toggles" id="vp-platforms">
@@ -227,20 +268,32 @@ async function openYoutubeModal(id) {
       <input id="yt-rpm" class="form-control" type="number" min="0" step="0.01" value="${c?.adsense_rpm||2.00}">
       <div class="form-hint">Valor médio que recebes por 1000 visualizações</div>
     </div>
-    <div class="form-group mb-0">
+    <div class="form-group">
       <label class="form-label">Descrição / Notas</label>
       <textarea id="yt-notas" class="form-control" rows="2" placeholder="Notas sobre o canal…">${c?.notas||''}</textarea>
-    </div>`;
+    </div>
+    <div class="form-group mb-0">
+      <label class="form-label">Imagens de referência <span class="text-muted" style="font-weight:400">(até 5 — banners, thumbnails)</span></label>
+      <div class="ref-images-grid" id="yt-ref-imgs"></div>
+      <div class="form-hint mt-1">Adiciona banners, thumbnails e imagens de exemplo do canal</div>
+    </div>
+    <div id="yt-gen-progress" style="min-height:22px;margin-top:12px;text-align:center;font-size:.82rem;color:var(--accent)"></div>`;
 
   const footer = `
     <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    ${isNew ? `<button id="btn-gerar-canal-aleatorio" class="btn btn-ghost" onclick="gerarCanalAleatorio()" title="Gera nome, nicho, banner e thumbnails automaticamente">
+      <i class="fa-solid fa-dice"></i> Gerar aleatório
+    </button>` : ''}
     <button class="btn btn-primary" onclick="saveYoutubeChannel('${id||''}')">
       <i class="fa-solid fa-floppy-disk"></i> ${isNew ? 'Criar' : 'Guardar'}
     </button>`;
 
   app.openModal(isNew ? 'Novo canal de vídeo' : `Editar — ${c.nome}`, body, footer);
-  // Atualizar labels com a plataforma atual
-  setTimeout(() => updateVideoPlataformaLabels(platAtual), 50);
+  // Atualizar labels e imagens de referência
+  setTimeout(() => {
+    updateVideoPlataformaLabels(platAtual);
+    _renderYtRefImages();
+  }, 50);
 }
 
 function selectVideoPlataforma(el) {
@@ -290,6 +343,175 @@ function updateVideoPlataformaLabels(plat) {
   if (rpmGroup) rpmGroup.style.display = plat === 'vimeo' ? 'none' : '';
 }
 
+async function gerarCanalDeConceito() {
+  const conceito = document.getElementById('concept-text-youtube')?.value.trim();
+  if (!conceito) { app.toast('Escreve primeiro o teu conceito', 'warning'); return; }
+
+  const btn      = document.querySelector('#concept-panel-youtube .btn-primary');
+  const progress = document.getElementById('concept-progress-youtube');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;display:inline-block"></div> A gerar…'; }
+  if (progress) progress.textContent = 'A interpretar conceito…';
+
+  try {
+    const prompt = `Cria um perfil de canal de vídeo baseado nesta descrição: "${conceito}"
+
+Responde APENAS com JSON válido, sem markdown, sem backticks:
+{
+  "nome": "Nome criativo e memorável para o canal (2-4 palavras)",
+  "nicho": "Nicho específico do canal",
+  "plataforma": "youtube ou twitch ou tiktok ou vimeo ou rumble ou dailymotion",
+  "notas": "Descrição em português: tipo de conteúdo, audiência alvo, estilo de apresentação, periodicidade sugerida — 2-3 frases"
+}`;
+
+    const raw  = await AI.generateText(prompt, { temperature: 0.8 });
+    const m    = raw.match(/\{[\s\S]*\}/);
+    const data = JSON.parse(m ? m[0] : raw);
+
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+    set('yt-nome',  data.nome);
+    set('yt-nicho', data.nicho || '');
+    set('yt-notas', data.notas || '');
+
+    // Selecionar plataforma
+    if (data.plataforma) {
+      const toggle = document.querySelector(`#vp-platforms [data-vp="${data.plataforma}"]`);
+      if (toggle) selectVideoPlataforma(toggle);
+    }
+
+    if (progress) progress.textContent = '';
+    _toggleConceptBar('youtube', false);
+    app.toast(`Canal "${data.nome}" gerado a partir do conceito!`, 'success');
+
+  } catch (e) {
+    if (progress) progress.textContent = '';
+    app.toast('Erro: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA'; }
+  }
+}
+
+/* ── Imagens de referência do canal ── */
+function _renderYtRefImages() {
+  const grid = document.getElementById('yt-ref-imgs');
+  if (!grid) return;
+  const items = _ytRefImagesState.map((img, i) => `
+    <div class="ref-image-item">
+      <img src="${img.dataUrl || img.url}" alt="ref ${i + 1}">
+      <button class="ref-image-delete" onclick="removeYtRefImage(${i})" title="Remover"><i class="fa-solid fa-xmark"></i></button>
+    </div>`).join('');
+  const addBtn = _ytRefImagesState.length < 5 ? `
+    <label class="ref-image-add" title="Adicionar imagem">
+      <i class="fa-solid fa-plus"></i>
+      <input type="file" accept="image/*" style="display:none" onchange="addYtRefImage(this)">
+    </label>` : '';
+  grid.innerHTML = items + addBtn;
+}
+
+function addYtRefImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (_ytRefImagesState.length >= 5) { app.toast('Máximo 5 imagens de referência', 'warning'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    _ytRefImagesState.push({ dataUrl: e.target.result, isNew: true });
+    _renderYtRefImages();
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeYtRefImage(i) {
+  _ytRefImagesState.splice(i, 1);
+  _renderYtRefImages();
+}
+
+/* ── Geração aleatória de canal com IA ── */
+async function gerarCanalAleatorio() {
+  const btnGerar   = document.getElementById('btn-gerar-canal-aleatorio');
+  const progressEl = document.getElementById('yt-gen-progress');
+  const setProgress = (msg) => { if (progressEl) progressEl.innerHTML = msg; };
+
+  if (btnGerar) {
+    btnGerar.disabled = true;
+    btnGerar.innerHTML = '<div class="spinner" style="width:14px;height:14px;display:inline-block"></div> A gerar…';
+  }
+
+  try {
+    setProgress('<i class="fa-solid fa-wand-magic-sparkles"></i> A criar identidade do canal…');
+
+    const jsonPrompt = `Cria um canal de vídeo fictício para redes sociais.
+Responde APENAS com JSON válido, sem markdown, sem backticks:
+{
+  "nome": "Nome criativo e memorável para o canal (2-4 palavras)",
+  "nicho": "Nicho específico de conteúdo",
+  "plataforma": "youtube ou twitch ou tiktok ou vimeo ou rumble ou dailymotion",
+  "visual_banner": "Descrição visual em inglês para um banner de canal 16:9: cores dominantes, estilo gráfico, mood, elementos visuais",
+  "visual_thumbnail": "Descrição visual em inglês para thumbnails típicas: estilo, composição, paleta de cores, elementos recorrentes",
+  "notas": "Descrição em português do canal: tipo de conteúdo, audiência alvo, estilo de apresentação, periodicidade — 2-3 frases"
+}
+Sê muito criativo e específico.`;
+
+    const rawJson = await AI.generateText(jsonPrompt, { temperature: 0.95 });
+    let data;
+    try {
+      const match = rawJson.match(/\{[\s\S]*\}/);
+      data = JSON.parse(match ? match[0] : rawJson);
+    } catch (_) {
+      throw new Error('Formato de resposta inválido. Tenta novamente.');
+    }
+
+    setProgress('<i class="fa-solid fa-pen"></i> A preencher campos…');
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    setVal('yt-nome',  data.nome);
+    setVal('yt-nicho', data.nicho);
+    setVal('yt-notas', data.notas);
+
+    if (data.plataforma) {
+      const toggle = document.querySelector(`#vp-platforms [data-vp="${data.plataforma}"]`);
+      if (toggle) selectVideoPlataforma(toggle);
+    }
+
+    /* ── Banner do canal ── */
+    setProgress('<i class="fa-regular fa-image"></i> A gerar banner do canal…');
+    try {
+      const bannerPrompt = `YouTube channel banner art, ${data.visual_banner}, professional design for "${data.nome}" channel, 16:9 landscape format, high quality, digital art, modern`;
+      const bannerDataUrl = await AI.generateImage(bannerPrompt, { aspectRatio: '16:9' });
+      if (bannerDataUrl) {
+        _ytRefImagesState = [{ dataUrl: bannerDataUrl, isNew: true, _isBanner: true }, ..._ytRefImagesState.slice(0, 4)];
+        _renderYtRefImages();
+      }
+    } catch (e) {
+      console.warn('Falha ao gerar banner:', e);
+    }
+
+    /* ── Thumbnail de referência ── */
+    if (_ytRefImagesState.length < 5) {
+      setProgress('<i class="fa-solid fa-images"></i> A gerar thumbnail de referência…');
+      try {
+        const thumbPrompt = `Video thumbnail style, ${data.visual_thumbnail}, for "${data.nome}" channel, eye-catching, high contrast, professional content creator, 16:9`;
+        const thumbDataUrl = await AI.generateImage(thumbPrompt, { aspectRatio: '16:9' });
+        if (thumbDataUrl) {
+          _ytRefImagesState.push({ dataUrl: thumbDataUrl, isNew: true });
+          _renderYtRefImages();
+        }
+      } catch (e) {
+        console.warn('Falha ao gerar thumbnail:', e);
+      }
+    }
+
+    setProgress('');
+    app.toast(`Canal "${data.nome}" gerado! Revê os campos e guarda.`, 'success');
+
+  } catch (e) {
+    setProgress('');
+    app.toast('Erro: ' + e.message, 'error');
+  } finally {
+    if (btnGerar) {
+      btnGerar.disabled = false;
+      btnGerar.innerHTML = '<i class="fa-solid fa-dice"></i> Gerar aleatório';
+    }
+  }
+}
+
 async function saveYoutubeChannel(id) {
   const plataforma  = document.getElementById('vp-plataforma')?.value || 'youtube';
   const nome        = document.getElementById('yt-nome')?.value.trim();
@@ -302,15 +524,38 @@ async function saveYoutubeChannel(id) {
   const receita_mes = parseFloat(document.getElementById('yt-receita')?.value)||0;
   const adsense_rpm = parseFloat(document.getElementById('yt-rpm')?.value)||2;
   const notas       = document.getElementById('yt-notas')?.value.trim();
+  const avatar_id   = document.getElementById('yt-avatar-id')?.value || null;
 
   if (!nome) { app.toast('Nome é obrigatório', 'error'); return; }
 
-  const payload = { plataforma, nome, nicho, canal_id, imagem_url, seguidores, total_views, videos_count, receita_mes, adsense_rpm, notas };
+  const payload = { plataforma, nome, nicho, canal_id, imagem_url, seguidores, total_views, videos_count, receita_mes, adsense_rpm, notas, avatar_id };
   if (id) payload.id = id;
 
   if (DB.ready()) {
-    const { error } = await DB.upsertYoutubeChannel(payload);
-    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+    const { data: saved, error } = await DB.upsertYoutubeChannel(payload);
+    if (error) { console.error('[YT save] error obj:', error, JSON.stringify(error)); app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
+
+    const savedId = saved?.id || id;
+    const storagePrefix = savedId || String(Date.now());
+    const refUrls = [];
+
+    for (const img of _ytRefImagesState) {
+      if (!img.isNew) {
+        refUrls.push(img.url);
+      } else if (img.dataUrl) {
+        const { url, error: uploadErr } = await DB.uploadYoutubeReferenceImage(img.dataUrl, storagePrefix);
+        if (uploadErr) {
+          console.warn('Erro ao fazer upload de imagem de referência do canal:', uploadErr);
+        } else {
+          refUrls.push(url);
+        }
+      }
+    }
+
+    if (savedId && refUrls.length > 0) {
+      const { error: refErr } = await DB.updateYoutubeRefImages(savedId, refUrls);
+      if (refErr) console.warn('Erro ao guardar imagens de referência:', refErr);
+    }
   }
 
   app.toast(id ? 'Canal atualizado!' : 'Canal criado!', 'success');

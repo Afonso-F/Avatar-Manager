@@ -106,8 +106,7 @@ function renderAvatarCard(a, isActive) {
         ${!isActive
           ? `<button class="btn btn-sm btn-secondary flex-1" onclick="setActiveAvatar('${a.id}')"><i class="fa-solid fa-star"></i> Ativar</button>`
           : '<span class="btn btn-sm btn-secondary flex-1 text-center" style="cursor:default;opacity:.5"><i class="fa-solid fa-star"></i> Ativo</span>'}
-        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarMonetizacaoModal('${a.id}')" title="Monetização"><i class="fa-solid fa-coins" style="color:var(--yellow)"></i></button>
-        <button class="btn btn-sm btn-secondary btn-icon" onclick="openContasModal('${a.id}','${escHtml(a.nome)}')" title="Contas sociais"><i class="fa-solid fa-link"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarDashboard('${a.id}')" title="Dashboard — canais, contas, receitas"><i class="fa-solid fa-table-columns" style="color:var(--accent)"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openAvatarModal('${a.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-sm btn-danger btn-icon" onclick="confirmDeleteAvatar('${a.id}', this.dataset.nome)" data-nome="${escHtml(a.nome)}" title="Apagar"><i class="fa-solid fa-trash"></i></button>
       </div>
@@ -122,6 +121,230 @@ function setActiveAvatar(id) {
   app.toast('Avatar ativo alterado!', 'success');
 }
 
+/* ── Conceito com IA ── */
+function _toggleConceptBar(type, force) {
+  const panel = document.getElementById(`concept-panel-${type}`);
+  const btn   = document.getElementById(`concept-toggle-btn-${type}`);
+  if (!panel) return;
+  const open = force !== undefined ? force : !panel.classList.contains('open');
+  panel.classList.toggle('open', open);
+  if (btn) btn.style.borderColor = open ? 'var(--accent)' : '';
+}
+
+async function gerarAvatarDeConceito() {
+  const conceito = document.getElementById('concept-text-avatar')?.value.trim();
+  if (!conceito) { app.toast('Escreve primeiro o teu conceito', 'warning'); return; }
+
+  const btn = document.querySelector('#concept-panel-avatar .btn-primary');
+  const progress = document.getElementById('concept-progress-avatar');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;display:inline-block"></div> A gerar…'; }
+  if (progress) progress.textContent = 'A interpretar conceito com IA…';
+
+  try {
+    const prompt = `Cria um perfil completo de avatar criador de conteúdo baseado nesta descrição do utilizador: "${conceito}"
+
+Responde APENAS com JSON válido, sem markdown, sem backticks:
+{
+  "nome": "Nome único e criativo (inspirado na descrição, 1-2 palavras)",
+  "nicho": "Nicho específico extraído/inferido da descrição",
+  "emoji": "1 emoji representativo",
+  "categorias": ["1-3 de: SFW, NSFW, Anime, Cosplay, Realista, Lifestyle, Gaming, Music, Fitness, Art"],
+  "plataformas": ["2-4 de: instagram, tiktok, facebook, youtube, fansly, onlyfans, patreon, twitch, spotify"],
+  "prompt_base": "Personalidade detalhada em português baseada na descrição — 3-4 frases sobre estilo, tom, conteúdo e forma de interagir com a audiência"
+}
+Interpreta e complementa criativamente o que faltar na descrição.`;
+
+    const raw  = await AI.generateText(prompt, { temperature: 0.85 });
+    const m    = raw.match(/\{[\s\S]*\}/);
+    const data = JSON.parse(m ? m[0] : raw);
+
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+    set('av-nome',   data.nome);
+    set('av-nicho',  data.nicho);
+    set('av-emoji',  data.emoji || '🎭');
+    set('av-prompt', data.prompt_base);
+
+    if (data.categorias) {
+      document.querySelectorAll('#av-cats .category-chip').forEach(chip => {
+        const on = data.categorias.some(c => c.toLowerCase() === chip.dataset.cat.toLowerCase());
+        chip.classList.toggle('active', on);
+      });
+    }
+    if (data.plataformas) {
+      document.querySelectorAll('#av-platforms .platform-toggle').forEach(t => {
+        const on = data.plataformas.includes(t.dataset.p);
+        t.classList.toggle('active', on);
+        t.classList.toggle(t.dataset.p, on);
+      });
+    }
+
+    if (progress) progress.textContent = '';
+    _toggleConceptBar('avatar', false);
+    app.toast(`Avatar "${data.nome}" gerado a partir do conceito!`, 'success');
+
+  } catch (e) {
+    if (progress) progress.textContent = '';
+    app.toast('Erro: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA'; }
+  }
+}
+
+/* ── Dashboard do Avatar ── */
+async function openAvatarDashboard(avatarId) {
+  const a = app.getAvatares().find(x => String(x.id) === String(avatarId));
+  if (!a) return;
+
+  const avatarSrc = (a.imagens_referencia || [])[0] || a.imagem_url || null;
+  const heroHtml  = `
+    <div class="av-dash-hero">
+      <div class="av-dash-avatar">
+        ${avatarSrc
+          ? `<img src="${escHtml(avatarSrc)}" alt="${escHtml(a.nome)}">`
+          : `<span>${escHtml(a.emoji || '🎭')}</span>`}
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:1.1rem">${escHtml(a.nome)}</div>
+        <div style="color:var(--text-muted);font-size:.85rem">${escHtml(a.nicho)}</div>
+      </div>
+    </div>`;
+
+  const body = `
+    ${heroHtml}
+    <div class="av-dash-tabs" id="av-dash-tabs">
+      <button class="av-dash-tab active" onclick="switchAvDashTab('canais',this)"><i class="fa-solid fa-video"></i> Canais</button>
+      <button class="av-dash-tab" onclick="switchAvDashTab('contas',this)"><i class="fa-solid fa-link"></i> Contas</button>
+      <button class="av-dash-tab" onclick="switchAvDashTab('receitas',this)"><i class="fa-solid fa-coins"></i> Receitas</button>
+      <button class="av-dash-tab" onclick="switchAvDashTab('posts',this)"><i class="fa-solid fa-calendar"></i> Posts</button>
+    </div>
+    <div id="av-dash-content" style="min-height:200px">
+      <div class="spinner-center"><div class="spinner"></div></div>
+    </div>`;
+
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Fechar</button>
+    <button class="btn btn-secondary" onclick="app.closeModal();openAvatarModal('${avatarId}')"><i class="fa-solid fa-pen"></i> Editar avatar</button>
+    <button class="btn btn-primary" onclick="app.closeModal();openYoutubeModal(null,'${avatarId}')"><i class="fa-solid fa-plus"></i> Novo canal</button>`;
+
+  app.openModal(`Dashboard — ${a.nome}`, body, footer);
+
+  // Carregar dados em paralelo
+  const [contasRes, postsRes, fanslyRes, ofRes, canaisRes] = await Promise.all([
+    DB.ready() ? DB.getContas(avatarId)                          : Promise.resolve({ data: [] }),
+    DB.ready() ? DB.getPosts({ avatar_id: avatarId, limit: 8 }) : Promise.resolve({ data: [] }),
+    DB.ready() ? DB.getFanslyStats(avatarId)                     : Promise.resolve({ data: [] }),
+    DB.ready() ? DB.getOnlyfansStats(avatarId)                   : Promise.resolve({ data: [] }),
+    DB.ready() ? DB.getYoutubeChannels({ avatar_id: avatarId })  : Promise.resolve({ data: [] }),
+  ]);
+
+  window._avDashData = {
+    avatarId,
+    contas:   contasRes.data  || [],
+    posts:    postsRes.data   || [],
+    fansly:   fanslyRes.data  || [],
+    onlyfans: ofRes.data      || [],
+    canais:   canaisRes.data  || [],
+  };
+
+  switchAvDashTab('canais', document.querySelector('#av-dash-tabs .av-dash-tab'));
+}
+
+function switchAvDashTab(tab, btn) {
+  document.querySelectorAll('#av-dash-tabs .av-dash-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const d    = window._avDashData || {};
+  const cont = document.getElementById('av-dash-content');
+  if (!cont) return;
+
+  if (tab === 'canais') {
+    const canais = d.canais || [];
+    cont.innerHTML = canais.length === 0
+      ? `<div class="empty-state" style="padding:30px"><i class="fa-solid fa-video"></i><p>Sem canais associados.<br><span class="text-muted text-sm">Cria um canal e associa-o a este avatar.</span></p></div>`
+      : `<div style="display:flex;flex-direction:column;gap:10px">
+          ${canais.map(c => {
+            const info = window.VIDEO_PLATAFORMAS?.[c.plataforma || 'youtube'] || { label: 'YouTube', color: '#ff0000', icon: 'fa-brands fa-youtube' };
+            return `<div style="background:var(--bg-elevated);border-radius:var(--radius);padding:12px;display:flex;align-items:center;gap:12px">
+              <i class="${info.icon}" style="color:${info.color};font-size:1.4rem;flex-shrink:0"></i>
+              <div style="min-width:0;flex:1">
+                <div style="font-weight:600">${escHtml(c.nome)}</div>
+                <div class="text-sm text-muted">${escHtml(c.nicho || info.label)} · ${app.formatNumber(c.seguidores || 0)} subs · ${app.formatNumber(c.total_views || 0)} views</div>
+              </div>
+              <div style="color:var(--green);font-weight:700;font-size:.9rem">€${parseFloat(c.receita_mes || 0).toFixed(2)}/mês</div>
+              <button class="btn btn-sm btn-secondary btn-icon" onclick="app.closeModal();openYoutubeModal('${c.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
+            </div>`;
+          }).join('')}
+        </div>`;
+  }
+
+  if (tab === 'contas') {
+    const contas = (d.contas || []).filter(c => c.username || c.conta_id);
+    cont.innerHTML = contas.length === 0
+      ? `<div class="empty-state" style="padding:30px"><i class="fa-solid fa-link"></i><p>Sem contas configuradas.</p></div>`
+      : `<div style="display:flex;flex-direction:column;gap:8px">
+          ${contas.map(c => {
+            const info = window.PLATAFORMAS_INFO?.[c.plataforma] || {};
+            return `<div style="background:var(--bg-elevated);border-radius:var(--radius);padding:10px 14px;display:flex;align-items:center;gap:10px">
+              <i class="${info.icon || 'fa-solid fa-link'}" style="font-size:1.1rem;flex-shrink:0"></i>
+              <div style="min-width:0;flex:1">
+                <div style="font-weight:600;font-size:.9rem">${escHtml(info.label || c.plataforma)}</div>
+                <div class="text-sm text-muted">${escHtml(c.username || '')}${c.conta_id ? ' · ' + escHtml(c.conta_id) : ''}</div>
+              </div>
+              <span class="badge badge-green" style="font-size:.7rem">Configurado</span>
+            </div>`;
+          }).join('')}
+          <button class="btn btn-sm btn-secondary mt-1" onclick="app.closeModal();openContasModal('${d.avatarId}','${escHtml((app.getAvatares().find(x=>String(x.id)===String(d.avatarId))?.nome)||'')}')">
+            <i class="fa-solid fa-pen"></i> Editar contas
+          </button>
+        </div>`;
+  }
+
+  if (tab === 'receitas') {
+    const hoje = new Date();
+    const mesAtual = hoje.toISOString().slice(0, 7) + '-01';
+    const fl = (d.fansly   || []).find(s => s.mes === mesAtual) || {};
+    const of = (d.onlyfans || []).find(s => s.mes === mesAtual) || {};
+    const flTotal = (parseFloat(fl.receita) || 0) + (parseFloat(fl.tips) || 0);
+    const ofTotal = (parseFloat(of.receita) || 0) + (parseFloat(of.tips) || 0) + (parseFloat(of.ppv_receita) || 0);
+    const total   = flTotal + ofTotal;
+
+    cont.innerHTML = `
+      <div class="grid-2" style="margin-bottom:16px">
+        <div class="stat-card" style="cursor:pointer" onclick="app.closeModal();openAvatarFanslyModal('${d.avatarId}')">
+          <div class="stat-icon" style="background:rgba(236,72,153,.1)"><i class="fa-solid fa-dollar-sign" style="color:var(--pink)"></i></div>
+          <div class="stat-value" style="color:var(--pink)">€${flTotal.toFixed(2)}</div>
+          <div class="stat-label">Fansly este mês</div>
+          ${fl.subscribers ? `<div class="text-sm text-muted">${fl.subscribers.toLocaleString()} subs</div>` : ''}
+        </div>
+        <div class="stat-card" style="cursor:pointer" onclick="app.closeModal();openAvatarOnlyfansModal('${d.avatarId}')">
+          <div class="stat-icon" style="background:rgba(59,130,246,.1)"><i class="fa-solid fa-heart" style="color:var(--blue)"></i></div>
+          <div class="stat-value" style="color:var(--blue)">€${ofTotal.toFixed(2)}</div>
+          <div class="stat-label">OnlyFans este mês</div>
+          ${of.subscribers ? `<div class="text-sm text-muted">${of.subscribers.toLocaleString()} subs</div>` : ''}
+        </div>
+      </div>
+      <div style="background:var(--bg-elevated);border-radius:var(--radius);padding:14px;text-align:center">
+        <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:4px">Total este mês</div>
+        <div style="font-size:1.6rem;font-weight:800;color:var(--green)">€${total.toFixed(2)}</div>
+      </div>`;
+  }
+
+  if (tab === 'posts') {
+    const posts = d.posts || [];
+    cont.innerHTML = posts.length === 0
+      ? `<div class="empty-state" style="padding:30px"><i class="fa-regular fa-calendar-xmark"></i><p>Sem posts recentes.</p></div>`
+      : `<div style="display:flex;flex-direction:column;gap:8px">
+          ${posts.map(p => `
+            <div style="background:var(--bg-elevated);border-radius:var(--radius);padding:10px 14px;display:flex;align-items:center;gap:10px">
+              ${p.imagem_url ? `<img src="${p.imagem_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0">` : '<div style="width:40px;height:40px;background:var(--bg-hover);border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center"><i class="fa-regular fa-image" style="color:var(--text-muted)"></i></div>'}
+              <div style="min-width:0;flex:1">
+                <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((p.legenda || '').slice(0, 80))}</div>
+                <div class="text-sm text-muted">${app.statusBadge(p.status)} ${app.formatDate(p.agendado_para)}</div>
+              </div>
+            </div>`).join('')}
+        </div>`;
+  }
+}
+
 function openAvatarModal(id) {
   const avatares = app.getAvatares();
   const a = id ? avatares.find(x => String(x.id) === String(id)) : null;
@@ -131,6 +354,26 @@ function openAvatarModal(id) {
   const avatarCats = Array.isArray(a?.categorias) ? a.categorias : [];
 
   const body = `
+    <div class="concept-toolbar">
+      <button id="prompts-toggle-btn-avatar" class="btn btn-sm btn-ghost" onclick="PromptsLibrary.toggle('avatar')">
+        <i class="fa-solid fa-book-open"></i> Biblioteca
+      </button>
+      <button id="concept-toggle-btn-avatar" class="btn btn-sm btn-ghost" onclick="_toggleConceptBar('avatar')">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Descrever com IA
+      </button>
+    </div>
+    ${PromptsLibrary.renderAvatarPanel()}
+    <div class="concept-panel" id="concept-panel-avatar">
+      <div class="concept-panel-label"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent)"></i> Descreve o teu conceito de avatar — a IA preenche tudo</div>
+      <textarea id="concept-text-avatar" class="form-control" rows="3"
+        placeholder="Ex: Criadora de fitness para mulheres acima dos 40, treinos em casa, tom motivador e realista, partilha refeições e rotinas…"></textarea>
+      <div class="flex items-center gap-2 mt-2">
+        <button class="btn btn-sm btn-primary" onclick="gerarAvatarDeConceito()">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA
+        </button>
+        <span id="concept-progress-avatar" class="text-sm" style="color:var(--accent)"></span>
+      </div>
+    </div>
     <div class="form-group">
       <label class="form-label">Nome *</label>
       <input id="av-nome" class="form-control" value="${escHtml(a?.nome || '')}" placeholder="Ex: Luna">
@@ -158,7 +401,7 @@ function openAvatarModal(id) {
       <div class="form-hint mt-1">Clica para selecionar/deselecionar</div>
     </div>
     <div class="form-group">
-      <label class="form-label">Prompt base (personalidade para o Gemini)</label>
+      <label class="form-label">Prompt base (personalidade para a IA)</label>
       <textarea id="av-prompt" class="form-control" rows="3" placeholder="Descreve o estilo, tom e personalidade do avatar…">${escHtml(a?.prompt_base || '')}</textarea>
     </div>
     <div class="form-group">
@@ -259,8 +502,9 @@ async function saveAvatar(id) {
   if (id) avatar.id = id;
 
   if (DB.ready()) {
+    console.log('[Avatar save] payload:', JSON.stringify(avatar));
     const { data: saved, error } = await DB.upsertAvatar(avatar);
-    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+    if (error) { console.error('[Avatar save] error:', error, 'keys:', Object.keys(error||{}), 'msg:', error?.message, 'details:', error?.details); app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
 
     const savedId = saved?.id || id;
     const storagePrefix = savedId || String(Date.now());
@@ -284,7 +528,7 @@ async function saveAvatar(id) {
       if (refErr) console.warn('Erro ao guardar imagens de referência:', refErr);
     }
   } else {
-    avatar.imagens_referencia = _refImagesState.filter(i => !i.isNew).map(i => i.url);
+    avatar.imagens_referencia = _refImagesState.map(i => i.dataUrl || i.url).filter(Boolean);
     const list = app.getAvatares();
     if (id) {
       const idx = list.findIndex(x => String(x.id) === String(id));
@@ -338,21 +582,29 @@ async function gerarAvatarAleatorio() {
     /* ── Passo 1: Gerar identidade completa ── */
     setProgress('<i class="fa-solid fa-wand-magic-sparkles"></i> A criar identidade do avatar…');
 
+    const _shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+    const _plats   = _shuffle(['instagram','tiktok','facebook','youtube','fansly','onlyfans','patreon','twitch','spotify']);
+    const _cats    = _shuffle(['SFW','NSFW','Anime','Cosplay','Realista','Lifestyle','Gaming','Music','Fitness','Art']);
+    const _seeds   = ['europeia','asiática','latina','africana','médio-oriental','sul-asiática'];
+    const _etnias  = ['escandinava','japonesa','brasileira','nigeriana','árabe','indiana','coreana','francesa','mexicana','russa'];
+    const _seed    = _etnias[Math.floor(Math.random() * _etnias.length)];
+
     const jsonPrompt = `Cria um avatar de criador de conteúdo fictício para redes sociais.
+Seed de diversidade (usa como inspiração): etnia ${_seed}, número aleatório ${Math.floor(Math.random()*9999)}.
 Responde APENAS com JSON válido, sem markdown, sem código, sem backticks:
 {
-  "nome": "Nome único e criativo (1-2 palavras, soa real)",
-  "nicho": "Nicho de conteúdo específico e interessante",
+  "nome": "Nome único e criativo (1-2 palavras, soa real, inspirado na etnia ${_seed})",
+  "nicho": "Nicho de conteúdo específico e interessante (evita fitness genérico e lifestyle vago)",
   "emoji": "1 emoji representativo do nicho",
-  "aparencia": "Descrição física detalhada em inglês para geração de imagem: etnia, cabelo (cor e estilo), cor dos olhos, expressão, roupa típica, ambiente/fundo sugerido",
+  "aparencia": "Descrição física detalhada em inglês para geração de imagem: etnia ${_seed}, cabelo (cor e estilo), cor dos olhos, expressão, roupa típica, ambiente/fundo sugerido",
   "ambiente_lifestyle": "Ambiente/cenário em inglês para fotos de lifestyle relacionado com o nicho",
-  "categorias": ["máx 3 itens de: SFW, NSFW, Anime, Cosplay, Realista, Lifestyle, Gaming, Music, Fitness, Art"],
-  "plataformas": ["2-4 itens de: instagram, tiktok, facebook, youtube, fansly, onlyfans, patreon, twitch, spotify"],
+  "categorias": ["escolhe 1-3 itens desta lista (por esta ordem de preferência): ${_cats.join(', ')}"],
+  "plataformas": ["escolhe 2-4 itens desta lista (por esta ordem de preferência): ${_plats.join(', ')}"],
   "prompt_base": "Personalidade detalhada em português: estilo visual, tom de voz, características únicas, tipo de conteúdo que cria, como interage com a audiência — 3-4 frases ricas"
 }
 Sê muito criativo, específico e coerente. O avatar deve ter uma identidade única e memorável.`;
 
-    const rawJson = await Gemini.generateText(jsonPrompt, { temperature: 0.95 });
+    const rawJson = await AI.generateText(jsonPrompt, { temperature: 0.95 });
 
     let data;
     try {
@@ -391,7 +643,7 @@ Sê muito criativo, específico e coerente. O avatar deve ter uma identidade ún
 
     const portraitPrompt = `Professional portrait photo, ${data.aparencia}, content creator for ${data.nicho}, soft diffused studio lighting, looking at camera, clean subtle gradient background, photorealistic, ultra high quality, 4K, sharp focus, Instagram-worthy headshot`;
 
-    const avatarDataUrl = await Gemini.generateImage(portraitPrompt, { aspectRatio: '1:1' });
+    const avatarDataUrl = await AI.generateImage(portraitPrompt, { aspectRatio: '1:1' });
     if (avatarDataUrl) {
       _refImagesState = [{ dataUrl: avatarDataUrl, isNew: true, _isPortrait: true }, ..._refImagesState.slice(0, 4)];
       _renderRefImages();
@@ -407,7 +659,7 @@ Sê muito criativo, específico e coerente. O avatar deve ter uma identidade ún
       if (_refImagesState.length >= 5) break;
       setProgress(`<i class="fa-solid fa-images"></i> A gerar imagem de referência ${i + 1}/2…`);
       try {
-        const refDataUrl = await Gemini.generateImage(refPrompts[i], { aspectRatio: '4:5' });
+        const refDataUrl = await AI.generateImage(refPrompts[i], { aspectRatio: '4:5' });
         if (refDataUrl) {
           _refImagesState.push({ dataUrl: refDataUrl, isNew: true });
           _renderRefImages();
@@ -534,7 +786,7 @@ async function saveAvatarFanslyStats(avatarId, mes, existingId) {
 
   if (DB.ready()) {
     const { error } = await DB.upsertFanslyStats(payload);
-    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
   }
 
   app.toast('Stats Fansly guardadas!', 'success');
@@ -704,7 +956,7 @@ async function saveAvatarOnlyfansStats(avatarId, mes, existingId) {
 
   if (DB.ready()) {
     const { error } = await DB.upsertOnlyfansStats(payload);
-    if (error) { app.toast('Erro ao guardar: ' + error, 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
   }
 
   app.toast('Stats OnlyFans guardadas!', 'success');

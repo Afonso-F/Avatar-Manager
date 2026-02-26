@@ -352,7 +352,7 @@ async function saveCampanha(id) {
 
   if (DB.ready()) {
     const { data: saved, error } = await DB.upsertCampanha(campanha);
-    if (error) { app.toast('Erro ao guardar: ' + (error.message || error), 'error'); return; }
+    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
     if (id) {
       _campState.items = _campState.items.map(c => String(c.id) === String(id) ? { ...c, ...campanha } : c);
     } else {
