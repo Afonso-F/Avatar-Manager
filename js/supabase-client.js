@@ -102,9 +102,11 @@ const DB = (() => {
   }
 
   /* ── YouTube Channels ── */
-  async function getYoutubeChannels() {
+  async function getYoutubeChannels({ avatar_id } = {}) {
     if (!_client) return { data: [], error: 'not connected' };
-    return _client.from('youtube_channels').select('*').order('nome');
+    let q = _client.from('youtube_channels').select('*').order('nome');
+    if (avatar_id) q = q.eq('avatar_id', avatar_id);
+    return q;
   }
 
   async function upsertYoutubeChannel(channel) {

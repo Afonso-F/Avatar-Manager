@@ -160,23 +160,53 @@ function renderYoutubeCard(c) {
 }
 
 /* ── Modal Criar/Editar Canal ── */
-async function openYoutubeModal(id) {
-  let canais = [];
+async function openYoutubeModal(id, preAvatarId = '') {
+  let canais = [], avatares = app.getAvatares();
   if (DB.ready()) {
     const { data } = await DB.getYoutubeChannels();
     canais = data || [];
+    if (!avatares.length) {
+      const { data: avData } = await DB.getAvatares();
+      avatares = avData || [];
+      app.setAvatares(avatares);
+    }
   }
   const c = id ? canais.find(x => String(x.id) === String(id)) : null;
   const isNew = !c;
   const platAtual = c?.plataforma || 'youtube';
 
+  const avatarOpts = avatares.map(a =>
+    `<option value="${a.id}" ${String(c?.avatar_id || preAvatarId) === String(a.id) ? 'selected' : ''}>${a.emoji || '🎭'} ${a.nome}</option>`
+  ).join('');
+
   const body = `
-    <div class="prompts-toggle-bar">
+    <div class="concept-toolbar">
       <button id="prompts-toggle-btn-youtube" class="btn btn-sm btn-ghost" onclick="PromptsLibrary.toggle('youtube')">
-        <i class="fa-solid fa-book-open"></i> Biblioteca de prompts
+        <i class="fa-solid fa-book-open"></i> Biblioteca
+      </button>
+      <button id="concept-toggle-btn-youtube" class="btn btn-sm btn-ghost" onclick="_toggleConceptBar('youtube')">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Descrever com IA
       </button>
     </div>
     ${PromptsLibrary.renderYoutubePanel()}
+    <div class="concept-panel" id="concept-panel-youtube">
+      <div class="concept-panel-label"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent)"></i> Descreve o teu canal — a IA preenche tudo</div>
+      <textarea id="concept-text-youtube" class="form-control" rows="3"
+        placeholder="Ex: Canal de tutoriais de Python para iniciantes, vídeos curtos e directos, foco em automação e IA no dia-a-dia…"></textarea>
+      <div class="flex items-center gap-2 mt-2">
+        <button class="btn btn-sm btn-primary" onclick="gerarCanalDeConceito()">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA
+        </button>
+        <span id="concept-progress-youtube" class="text-sm" style="color:var(--accent)"></span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Avatar associado</label>
+      <select id="yt-avatar-id" class="form-control">
+        <option value="">Sem avatar associado</option>
+        ${avatarOpts}
+      </select>
+    </div>
     <div class="form-group">
       <label class="form-label">Plataforma *</label>
       <div class="platform-toggles" id="vp-platforms">
@@ -296,6 +326,53 @@ function updateVideoPlataformaLabels(plat) {
   if (rpmGroup) rpmGroup.style.display = plat === 'vimeo' ? 'none' : '';
 }
 
+async function gerarCanalDeConceito() {
+  const conceito = document.getElementById('concept-text-youtube')?.value.trim();
+  if (!conceito) { app.toast('Escreve primeiro o teu conceito', 'warning'); return; }
+
+  const btn      = document.querySelector('#concept-panel-youtube .btn-primary');
+  const progress = document.getElementById('concept-progress-youtube');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;display:inline-block"></div> A gerar…'; }
+  if (progress) progress.textContent = 'A interpretar conceito…';
+
+  try {
+    const prompt = `Cria um perfil de canal de vídeo baseado nesta descrição: "${conceito}"
+
+Responde APENAS com JSON válido, sem markdown, sem backticks:
+{
+  "nome": "Nome criativo e memorável para o canal (2-4 palavras)",
+  "nicho": "Nicho específico do canal",
+  "plataforma": "youtube ou twitch ou tiktok ou vimeo ou rumble ou dailymotion",
+  "notas": "Descrição em português: tipo de conteúdo, audiência alvo, estilo de apresentação, periodicidade sugerida — 2-3 frases"
+}`;
+
+    const raw  = await Gemini.generateText(prompt, { temperature: 0.8 });
+    const m    = raw.match(/\{[\s\S]*\}/);
+    const data = JSON.parse(m ? m[0] : raw);
+
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+    set('yt-nome',  data.nome);
+    set('yt-nicho', data.nicho || '');
+    set('yt-notas', data.notas || '');
+
+    // Selecionar plataforma
+    if (data.plataforma) {
+      const toggle = document.querySelector(`#vp-platforms [data-vp="${data.plataforma}"]`);
+      if (toggle) selectVideoPlataforma(toggle);
+    }
+
+    if (progress) progress.textContent = '';
+    _toggleConceptBar('youtube', false);
+    app.toast(`Canal "${data.nome}" gerado a partir do conceito!`, 'success');
+
+  } catch (e) {
+    if (progress) progress.textContent = '';
+    app.toast('Erro: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA'; }
+  }
+}
+
 async function saveYoutubeChannel(id) {
   const plataforma  = document.getElementById('vp-plataforma')?.value || 'youtube';
   const nome        = document.getElementById('yt-nome')?.value.trim();
@@ -308,10 +385,11 @@ async function saveYoutubeChannel(id) {
   const receita_mes = parseFloat(document.getElementById('yt-receita')?.value)||0;
   const adsense_rpm = parseFloat(document.getElementById('yt-rpm')?.value)||2;
   const notas       = document.getElementById('yt-notas')?.value.trim();
+  const avatar_id   = document.getElementById('yt-avatar-id')?.value || null;
 
   if (!nome) { app.toast('Nome é obrigatório', 'error'); return; }
 
-  const payload = { plataforma, nome, nicho, canal_id, imagem_url, seguidores, total_views, videos_count, receita_mes, adsense_rpm, notas };
+  const payload = { plataforma, nome, nicho, canal_id, imagem_url, seguidores, total_views, videos_count, receita_mes, adsense_rpm, notas, avatar_id };
   if (id) payload.id = id;
 
   if (DB.ready()) {
