@@ -589,6 +589,34 @@ async function gerarAvatarAleatorio() {
     const _etnias  = ['escandinava','japonesa','brasileira','nigeriana','árabe','indiana','coreana','francesa','mexicana','russa'];
     const _seed    = _etnias[Math.floor(Math.random() * _etnias.length)];
 
+    const _arquetipos = [
+      'a rainha do drama', 'o guru minimalista', 'a provocadora sem filtros',
+      'o investigador obsessivo', 'a sonhadora poética', 'o comediante ácido',
+      'a expert técnica fria', 'o mentor espiritual', 'a criativa caótica',
+      'o perfeccionista analítico'
+    ];
+    const _tons = [
+      'sarcástico e irreverente', 'educativo e metódico', 'caloroso e íntimo',
+      'misterioso e exclusivo', 'energético e provocador', 'suave e contemplativo',
+      'direto e sem rodeios', 'exuberante e teatral'
+    ];
+    const _estilos = [
+      'dark aesthetic', 'pastel e kawaii', 'monocromático editorial',
+      'colorido e caótico', 'clean e minimalista', 'vintage e nostálgico',
+      'cyberpunk e futurista', 'natureza e boho', 'luxo discreto'
+    ];
+    const _tracos = [
+      'obsessiva com detalhes', 'impulsiva e espontânea', 'sempre a desafiar tabus',
+      'extremamente consistente na identidade', 'vulnerável e autêntica',
+      'polarizadora — ama-se ou odeia-se', 'misteriosa sobre a vida pessoal',
+      'construiu comunidade de nicho ultra-fiel'
+    ];
+    const _pick = (arr, n = 1) => _shuffle(arr).slice(0, n);
+    const _pArquetipo = _pick(_arquetipos)[0];
+    const _pTom       = _pick(_tons)[0];
+    const _pEstilo    = _pick(_estilos)[0];
+    const _pTracos    = _pick(_tracos, 2);
+
     const jsonPrompt = `Cria um avatar de criador de conteúdo fictício para redes sociais.
 Seed de diversidade (usa como inspiração): etnia ${_seed}, número aleatório ${Math.floor(Math.random()*9999)}.
 Responde APENAS com JSON válido, sem markdown, sem código, sem backticks:
@@ -600,7 +628,7 @@ Responde APENAS com JSON válido, sem markdown, sem código, sem backticks:
   "ambiente_lifestyle": "Ambiente/cenário em inglês para fotos de lifestyle relacionado com o nicho",
   "categorias": ["escolhe 1-3 itens desta lista (por esta ordem de preferência): ${_cats.join(', ')}"],
   "plataformas": ["escolhe 2-4 itens desta lista (por esta ordem de preferência): ${_plats.join(', ')}"],
-  "prompt_base": "Personalidade detalhada em português: estilo visual, tom de voz, características únicas, tipo de conteúdo que cria, como interage com a audiência — 3-4 frases ricas"
+  "prompt_base": "Personalidade detalhada em português — 3-4 frases ricas. Seeds obrigatórios a incorporar: arquétipo=${_pArquetipo}, tom=${_pTom}, estilo visual=${_pEstilo}, traços=${_pTracos.join(' + ')}. Usa estes seeds como base mas expande criativamente."
 }
 Sê muito criativo, específico e coerente. O avatar deve ter uma identidade única e memorável.`;
 
