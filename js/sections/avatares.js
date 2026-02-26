@@ -502,8 +502,9 @@ async function saveAvatar(id) {
   if (id) avatar.id = id;
 
   if (DB.ready()) {
+    console.log('[Avatar save] payload:', JSON.stringify(avatar));
     const { data: saved, error } = await DB.upsertAvatar(avatar);
-    if (error) { app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
+    if (error) { console.error('[Avatar save] error:', error, 'keys:', Object.keys(error||{}), 'msg:', error?.message, 'details:', error?.details); app.toast('Erro ao guardar: ' + app.fmtErr(error), 'error'); return; }
 
     const savedId = saved?.id || id;
     const storagePrefix = savedId || String(Date.now());
