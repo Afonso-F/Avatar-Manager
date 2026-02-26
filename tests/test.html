@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <title>ContentHub — Testes de Utilidades</title>
+  <style>
+    body      { font-family: monospace; padding: 24px; background: #111; color: #ccc; margin: 0; }
+    h1        { color: #bb86fc; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: .85rem; margin-bottom: 24px; }
+    .group        { margin: 20px 0; }
+    .group-title  { color: #03dac6; font-size: 1rem; margin-bottom: 8px; border-bottom: 1px solid #222; padding-bottom: 4px; }
+    .test         { margin: 4px 0 4px 16px; font-size: .9rem; }
+    .pass         { color: #4caf50; }
+    .fail         { color: #f44336; }
+    .fail em      { color: #ff8a80; font-style: normal; margin-left: 8px; }
+    .summary      { margin-top: 28px; padding: 14px 18px; border-radius: 8px; font-size: 1.1rem; }
+    .summary.ok   { background: #1b3a27; color: #4caf50; }
+    .summary.bad  { background: #3a1b1b; color: #f44336; }
+  </style>
+</head>
+<body>
+<h1>ContentHub — Testes de Utilidades JS</h1>
+<p class="subtitle">Abre este ficheiro num browser para executar os testes.</p>
+<div id="results"></div>
+<div id="summary"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   Mini framework de testes
+   ══════════════════════════════════════════════════════════════════ */
+let _passed = 0, _failed = 0;
+const _results = document.getElementById('results');
+let _currentGroup = null;
+
+function describe(name, fn) {
+  const el = document.createElement('div');
+  el.className = 'group';
+  el.innerHTML = `<div class="group-title">${name}</div>`;
+  _results.appendChild(el);
+  _currentGroup = el;
+  fn();
+  _currentGroup = null;
+}
+
+function it(name, fn) {
+  const el = document.createElement('div');
+  el.className = 'test';
+  try {
+    fn();
+    el.innerHTML = `<span class="pass">✓</span> ${name}`;
+    _passed++;
+  } catch (e) {
+    el.innerHTML = `<span class="fail">✗</span> ${name}<em>${e.message}</em>`;
+    _failed++;
+  }
+  (_currentGroup || _results).appendChild(el);
+}
+
+function expect(val) {
+  return {
+    toBe:              (exp) => { if (val !== exp)                    throw new Error(`esperado ${JSON.stringify(exp)}, obtido ${JSON.stringify(val)}`); },
+    toEqual:           (exp) => { if (JSON.stringify(val) !== JSON.stringify(exp)) throw new Error(`esperado ${JSON.stringify(exp)}, obtido ${JSON.stringify(val)}`); },
+    toContain:         (sub) => { if (!String(val).includes(sub))     throw new Error(`"${val}" não contém "${sub}"`); },
+    toNotContain:      (sub) => { if (String(val).includes(sub))      throw new Error(`"${val}" não deveria conter "${sub}"`); },
+    toBeNull:          ()    => { if (val !== null)                    throw new Error(`esperado null, obtido ${JSON.stringify(val)}`); },
+    toBeTruthy:        ()    => { if (!val)                           throw new Error(`esperado truthy, obtido ${JSON.stringify(val)}`); },
+    toBeFalsy:         ()    => { if (val)                            throw new Error(`esperado falsy, obtido ${JSON.stringify(val)}`); },
+    toBeGreaterThan:   (n)   => { if (val <= n)                       throw new Error(`esperado > ${n}, obtido ${val}`); },
+    toBeLessThanOrEqual: (n) => { if (val > n)                        throw new Error(`esperado <= ${n}, obtido ${val}`); },
+    toHaveLength:      (n)   => { if ((val||'').length !== n)         throw new Error(`esperado comprimento ${n}, obtido ${(val||'').length}`); },
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Funções copiadas de app.js (testadas isoladamente)
+   ══════════════════════════════════════════════════════════════════ */
+function formatNumber(n) {
+  if (!n && n !== 0) return '—';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
+  return String(n);
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtErr(e) {
+  if (!e) return 'Erro desconhecido';
+  if (typeof e === 'string') return e;
+  const pick = v => (v && typeof v === 'string') ? v : null;
+  return pick(e.message) || pick(e.details) || pick(e.hint) || pick(e.code)
+    || (() => { try { const j = JSON.stringify(e); return j && j !== '{}' ? j : null; } catch { return null; } })()
+    || 'Erro desconhecido';
+}
+
+function statusBadge(status) {
+  const map = {
+    rascunho:  '<span class="badge badge-muted">Rascunho</span>',
+    agendado:  '<span class="badge badge-yellow">Agendado</span>',
+    publicado: '<span class="badge badge-green">Publicado</span>',
+    erro:      '<span class="badge badge-red">Erro</span>',
+  };
+  return map[status] || `<span class="badge badge-muted">${status}</span>`;
+}
+
+function platformIcon(p) {
+  const map = {
+    instagram: 'fa-brands fa-instagram icon-instagram',
+    tiktok:    'fa-brands fa-tiktok icon-tiktok',
+    facebook:  'fa-brands fa-facebook icon-facebook',
+    youtube:   'fa-brands fa-youtube icon-youtube',
+  };
+  return `<i class="${map[p] || 'fa-solid fa-globe'}"></i>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Função copiada de fila.js (lógica de geração de CSV)
+   ══════════════════════════════════════════════════════════════════ */
+function buildFilaCsv(posts, avatares) {
+  const header = 'Data agendada,Avatar,Status,Plataformas,Legenda,Hashtags\n';
+  const rows = posts.map(p => {
+    const av  = avatares.find(a => String(a.id) === String(p.avatar_id));
+    const leg = (p.legenda  || '').replace(/"/g, '""');
+    const hsh = (p.hashtags || '').replace(/"/g, '""');
+    return `${p.agendado_para || ''},${av?.nome || ''},${p.status},"${(p.plataformas || []).join(' ')}","${leg}","${hsh}"`;
+  }).join('\n');
+  return header + rows;
+}
+
+/* Função copiada de publicados.js (lógica de geração de CSV) */
+function buildPublicadosCsv(data, avatares) {
+  const header = 'Data publicação,Avatar,Plataforma,Legenda,Likes,Comentários,Views\n';
+  const rows = data.map(p => {
+    const av  = avatares.find(a => String(a.id) === String(p.avatar_id));
+    const leg = (p.posts?.legenda || '').replace(/"/g, '""');
+    return `${p.publicado_em || ''},${av?.nome || ''},${p.plataforma},"${leg}",${p.likes || 0},${p.comentarios || 0},${p.visualizacoes || 0}`;
+  }).join('\n');
+  return header + rows;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TESTES
+   ══════════════════════════════════════════════════════════════════ */
+
+describe('formatNumber()', () => {
+  it('formata 1.5M correctamente',            () => expect(formatNumber(1_500_000)).toBe('1.5M'));
+  it('formata 2.5k correctamente',            () => expect(formatNumber(2500)).toBe('2.5k'));
+  it('retorna número como string se < 1000',  () => expect(formatNumber(42)).toBe('42'));
+  it('retorna — para null',                   () => expect(formatNumber(null)).toBe('—'));
+  it('retorna — para undefined',              () => expect(formatNumber(undefined)).toBe('—'));
+  it('retorna "0" para zero',                 () => expect(formatNumber(0)).toBe('0'));
+  it('formata 1000 como 1.0k',               () => expect(formatNumber(1000)).toBe('1.0k'));
+  it('formata 1000000 como 1.0M',            () => expect(formatNumber(1_000_000)).toBe('1.0M'));
+  it('formata 999 como "999"',               () => expect(formatNumber(999)).toBe('999'));
+});
+
+describe('formatDate()', () => {
+  it('retorna — para null',                  () => expect(formatDate(null)).toBe('—'));
+  it('retorna — para undefined',             () => expect(formatDate(undefined)).toBe('—'));
+  it('retorna — para string vazia',          () => expect(formatDate('')).toBe('—'));
+  it('formata datas ISO e contém o ano',     () => expect(formatDate('2026-03-01T10:00:00Z')).toContain('2026'));
+  it('resultado é string não vazia',         () => expect(formatDate('2026-01-01T00:00:00Z')).toBeTruthy());
+});
+
+describe('fmtErr()', () => {
+  it('passa strings directamente',           () => expect(fmtErr('Erro de rede')).toBe('Erro de rede'));
+  it('extrai .message de objectos',          () => expect(fmtErr({ message: 'Token expirado' })).toBe('Token expirado'));
+  it('extrai .details quando sem .message',  () => expect(fmtErr({ details: 'FK violation' })).toBe('FK violation'));
+  it('extrai .hint',                         () => expect(fmtErr({ hint: 'Use outro campo' })).toBe('Use outro campo'));
+  it('extrai .code',                         () => expect(fmtErr({ code: 'P0001' })).toBe('P0001'));
+  it('retorna Erro desconhecido para null',  () => expect(fmtErr(null)).toBe('Erro desconhecido'));
+  it('serializa objectos desconhecidos',     () => expect(fmtErr({ foo: 'bar' })).toContain('bar'));
+  it('prefere .message a .details',         () => expect(fmtErr({ message: 'A', details: 'B' })).toBe('A'));
+});
+
+describe('statusBadge()', () => {
+  it('badge verde para publicado',           () => { expect(statusBadge('publicado')).toContain('badge-green'); expect(statusBadge('publicado')).toContain('Publicado'); });
+  it('badge vermelho para erro',             () => expect(statusBadge('erro')).toContain('badge-red'));
+  it('badge amarelo para agendado',          () => expect(statusBadge('agendado')).toContain('badge-yellow'));
+  it('badge muted para rascunho',            () => expect(statusBadge('rascunho')).toContain('badge-muted'));
+  it('badge genérico com texto para outros', () => { expect(statusBadge('xpto')).toContain('badge-muted'); expect(statusBadge('xpto')).toContain('xpto'); });
+});
+
+describe('platformIcon()', () => {
+  it('ícone instagram',                      () => expect(platformIcon('instagram')).toContain('fa-instagram'));
+  it('ícone tiktok',                         () => expect(platformIcon('tiktok')).toContain('fa-tiktok'));
+  it('ícone facebook',                       () => expect(platformIcon('facebook')).toContain('fa-facebook'));
+  it('ícone youtube',                        () => expect(platformIcon('youtube')).toContain('fa-youtube'));
+  it('globo para plataforma desconhecida',   () => expect(platformIcon('snapchat')).toContain('fa-globe'));
+  it('resultado é tag <i>',                  () => expect(platformIcon('instagram')).toContain('<i '));
+});
+
+describe('buildFilaCsv() — exportar fila', () => {
+  const avatares = [{ id: '1', nome: 'Luna' }, { id: '2', nome: 'Aria' }];
+  const posts = [{
+    id: 'p1', avatar_id: '1', status: 'agendado',
+    plataformas: ['instagram', 'tiktok'],
+    legenda: 'Bom dia mundo', hashtags: '#hello #world',
+    agendado_para: '2026-03-01T10:00:00Z',
+  }];
+
+  it('inclui linha de cabeçalho',            () => expect(buildFilaCsv(posts, avatares)).toContain('Data agendada,Avatar,Status,Plataformas,Legenda,Hashtags'));
+  it('inclui nome do avatar',                () => expect(buildFilaCsv(posts, avatares)).toContain('Luna'));
+  it('inclui status do post',               () => expect(buildFilaCsv(posts, avatares)).toContain('agendado'));
+  it('inclui plataformas separadas por espaço', () => expect(buildFilaCsv(posts, avatares)).toContain('instagram tiktok'));
+  it('inclui a legenda',                    () => expect(buildFilaCsv(posts, avatares)).toContain('Bom dia mundo'));
+  it('inclui as hashtags',                  () => expect(buildFilaCsv(posts, avatares)).toContain('#hello #world'));
+
+  it('escapa aspas duplas na legenda', () => {
+    const p = [{ ...posts[0], legenda: 'Ele disse "olá"', hashtags: '' }];
+    expect(buildFilaCsv(p, avatares)).toContain('Ele disse ""olá""');
+  });
+
+  it('usa nome vazio quando avatar não existe', () => {
+    const p = [{ ...posts[0], avatar_id: '99' }];
+    const csv = buildFilaCsv(p, avatares);
+    const firstDataRow = csv.split('\n')[1];
+    expect(firstDataRow.split(',')[1]).toBe('');
+  });
+
+  it('CSV vazio quando sem posts', () => {
+    const csv = buildFilaCsv([], avatares);
+    expect(csv).toBe('Data agendada,Avatar,Status,Plataformas,Legenda,Hashtags\n');
+  });
+
+  it('avatar_id de tipo diferente faz match', () => {
+    const p = [{ ...posts[0], avatar_id: 1 }]; // número em vez de string
+    expect(buildFilaCsv(p, avatares)).toContain('Luna');
+  });
+});
+
+describe('buildPublicadosCsv() — exportar publicados', () => {
+  const avatares = [{ id: 'av1', nome: 'Zara' }];
+  const data = [{
+    avatar_id: 'av1', plataforma: 'instagram',
+    publicado_em: '2026-02-20T15:00:00Z',
+    posts: { legenda: 'Foto verão' },
+    likes: 1200, comentarios: 55, visualizacoes: 9800,
+  }];
+
+  it('inclui cabeçalho correcto',            () => expect(buildPublicadosCsv(data, avatares)).toContain('Data publicação,Avatar,Plataforma,Legenda,Likes,Comentários,Views'));
+  it('inclui nome do avatar',                () => expect(buildPublicadosCsv(data, avatares)).toContain('Zara'));
+  it('inclui a plataforma',                  () => expect(buildPublicadosCsv(data, avatares)).toContain('instagram'));
+  it('inclui a legenda',                     () => expect(buildPublicadosCsv(data, avatares)).toContain('Foto verão'));
+  it('inclui métricas numéricas',            () => { expect(buildPublicadosCsv(data, avatares)).toContain('1200'); expect(buildPublicadosCsv(data, avatares)).toContain('9800'); });
+  it('usa 0 para métricas ausentes', () => {
+    const d = [{ ...data[0], likes: undefined, comentarios: null, visualizacoes: 0 }];
+    const csv = buildPublicadosCsv(d, avatares);
+    expect(csv).toContain(',0,0,0');
+  });
+});
+
+/* ── Sumário ──────────────────────────────────────────────── */
+const total = _passed + _failed;
+const ok    = _failed === 0;
+document.getElementById('summary').innerHTML =
+  `<div class="summary ${ok ? 'ok' : 'bad'}">` +
+  `${ok ? '✓' : '✗'} ${_passed}/${total} testes passaram` +
+  (_failed > 0 ? ` — ${_failed} falharam` : '') +
+  `</div>`;
+</script>
+</body>
+</html>
