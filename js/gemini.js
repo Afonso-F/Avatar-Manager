@@ -2,7 +2,7 @@
    gemini.js — Gemini API (texto + Imagen) + fal.ai (Wan 2.6 / vídeo)
    ============================================================ */
 const Gemini = (() => {
-  const TEXT_MODEL  = 'gemini-2.0-flash-lite';
+  const TEXT_MODEL  = 'gemini-1.5-flash';
   const IMAGE_MODEL = 'imagen-3.0-fast-generate-001';
   const BASE        = 'https://generativelanguage.googleapis.com/v1beta';
 
