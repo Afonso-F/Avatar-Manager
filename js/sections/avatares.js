@@ -582,16 +582,24 @@ async function gerarAvatarAleatorio() {
     /* ── Passo 1: Gerar identidade completa ── */
     setProgress('<i class="fa-solid fa-wand-magic-sparkles"></i> A criar identidade do avatar…');
 
+    const _shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+    const _plats   = _shuffle(['instagram','tiktok','facebook','youtube','fansly','onlyfans','patreon','twitch','spotify']);
+    const _cats    = _shuffle(['SFW','NSFW','Anime','Cosplay','Realista','Lifestyle','Gaming','Music','Fitness','Art']);
+    const _seeds   = ['europeia','asiática','latina','africana','médio-oriental','sul-asiática'];
+    const _etnias  = ['escandinava','japonesa','brasileira','nigeriana','árabe','indiana','coreana','francesa','mexicana','russa'];
+    const _seed    = _etnias[Math.floor(Math.random() * _etnias.length)];
+
     const jsonPrompt = `Cria um avatar de criador de conteúdo fictício para redes sociais.
+Seed de diversidade (usa como inspiração): etnia ${_seed}, número aleatório ${Math.floor(Math.random()*9999)}.
 Responde APENAS com JSON válido, sem markdown, sem código, sem backticks:
 {
-  "nome": "Nome único e criativo (1-2 palavras, soa real)",
-  "nicho": "Nicho de conteúdo específico e interessante",
+  "nome": "Nome único e criativo (1-2 palavras, soa real, inspirado na etnia ${_seed})",
+  "nicho": "Nicho de conteúdo específico e interessante (evita fitness genérico e lifestyle vago)",
   "emoji": "1 emoji representativo do nicho",
-  "aparencia": "Descrição física detalhada em inglês para geração de imagem: etnia, cabelo (cor e estilo), cor dos olhos, expressão, roupa típica, ambiente/fundo sugerido",
+  "aparencia": "Descrição física detalhada em inglês para geração de imagem: etnia ${_seed}, cabelo (cor e estilo), cor dos olhos, expressão, roupa típica, ambiente/fundo sugerido",
   "ambiente_lifestyle": "Ambiente/cenário em inglês para fotos de lifestyle relacionado com o nicho",
-  "categorias": ["máx 3 itens de: SFW, NSFW, Anime, Cosplay, Realista, Lifestyle, Gaming, Music, Fitness, Art"],
-  "plataformas": ["2-4 itens de: instagram, tiktok, facebook, youtube, fansly, onlyfans, patreon, twitch, spotify"],
+  "categorias": ["escolhe 1-3 itens desta lista (por esta ordem de preferência): ${_cats.join(', ')}"],
+  "plataformas": ["escolhe 2-4 itens desta lista (por esta ordem de preferência): ${_plats.join(', ')}"],
   "prompt_base": "Personalidade detalhada em português: estilo visual, tom de voz, características únicas, tipo de conteúdo que cria, como interage com a audiência — 3-4 frases ricas"
 }
 Sê muito criativo, específico e coerente. O avatar deve ter uma identidade única e memorável.`;
