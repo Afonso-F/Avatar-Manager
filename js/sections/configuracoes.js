@@ -107,9 +107,19 @@ function renderConfiguracoes(container) {
       </div>
     </div>
 
+    <!-- Geração de imagens -->
+    <div class="settings-section">
+      <div class="settings-section-title"><i class="fa-solid fa-image"></i> Geração de Imagens</div>
+      <div style="background:var(--green-soft);border:1px solid var(--green);border-radius:var(--radius);padding:10px 14px;font-size:0.82rem;color:var(--green);margin-bottom:12px">
+        <i class="fa-solid fa-circle-check"></i>
+        <strong>Gratuito e automático</strong> — imagens geradas via <strong>Pollinations.ai</strong> sem necessidade de API key.
+        Configura o fal.ai abaixo para maior qualidade (FLUX.1).
+      </div>
+    </div>
+
     <!-- fal.ai Vídeo IA -->
     <div class="settings-section">
-      <div class="settings-section-title"><i class="fa-solid fa-film"></i> fal.ai — Geração de Vídeo com IA</div>
+      <div class="settings-section-title"><i class="fa-solid fa-film"></i> fal.ai — Geração de Vídeo <span class="badge badge-muted" style="font-size:0.7rem;vertical-align:middle">Opcional</span></div>
       <div class="grid-2">
         <div class="form-group mb-0">
           <label class="form-label">API Key <a href="https://fal.ai/dashboard/keys" target="_blank" class="text-sm" style="color:var(--accent)">(obter chave)</a></label>
@@ -117,7 +127,7 @@ function renderConfiguracoes(container) {
             <input id="cfg-falai" class="form-control" type="password" value="${cfg.FAL_AI}" placeholder="key-…">
             <button class="key-toggle" onclick="toggleKeyVisibility('cfg-falai', this)"><i class="fa-solid fa-eye"></i></button>
           </div>
-          <div class="form-hint">Usada para gerar vídeos (Wan 2.6, Kling, LTX…)</div>
+          <div class="form-hint">Necessária apenas para geração de vídeo e imagens de maior qualidade (FLUX.1)</div>
         </div>
         <div class="form-group mb-0">
           <label class="form-label">Modelo de vídeo</label>
@@ -130,7 +140,6 @@ function renderConfiguracoes(container) {
             <option value="fal-ai/kling-video/v2.1/pro/text-to-video" ${cfg.VIDEO_MODEL==='fal-ai/kling-video/v2.1/pro/text-to-video'?'selected':''}>Kling v2.1 Pro</option>
             <option value="fal-ai/ltx-video" ${cfg.VIDEO_MODEL==='fal-ai/ltx-video'?'selected':''}>LTX Video</option>
           </select>
-          <div class="form-hint">Obrigatório para geração de imagens e vídeos (Mistral não gera imagens)</div>
         </div>
       </div>
       <div class="mt-2">

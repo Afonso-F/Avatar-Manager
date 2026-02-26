@@ -1,5 +1,7 @@
 /* ============================================================
-   gemini.js — Mistral AI (texto + visão) + fal.ai (imagens / vídeo)
+   gemini.js — Mistral AI (texto + visão) + imagens grátis via
+               Pollinations.ai (fallback) ou fal.ai (opcional)
+               + vídeo via fal.ai (opcional)
    ============================================================ */
 const Gemini = (() => {
   const TEXT_MODEL   = 'mistral-small-latest';   // mais barato para texto
@@ -52,13 +54,35 @@ const Gemini = (() => {
     return data?.choices?.[0]?.message?.content || '';
   }
 
-  /* ── Imagem via fal.ai (Mistral não gera imagens) ── */
+  /* ── Imagem: fal.ai (se configurado) ou Pollinations.ai (grátis) ── */
   async function generateImage(prompt, { aspectRatio = '1:1' } = {}) {
-    if (!falKey()) throw new Error('Chave fal.ai necessária para gerar imagens. Configura em Configurações → fal.ai.');
-    return _generateImageFal(prompt, { aspectRatio });
+    if (falKey()) return _generateImageFal(prompt, { aspectRatio });
+    return _generateImagePollinations(prompt, { aspectRatio });
   }
 
-  /* fal.ai FLUX.1 Schnell — ~$0.003/imagem, síncrono */
+  /* Pollinations.ai — completamente gratuito, sem API key */
+  async function _generateImagePollinations(prompt, { aspectRatio = '1:1' } = {}) {
+    const sizeMap = {
+      '1:1':  { w: 1024, h: 1024 },
+      '9:16': { w: 768,  h: 1344 },
+      '16:9': { w: 1344, h: 768  },
+      '4:3':  { w: 1024, h: 768  },
+      '3:4':  { w: 768,  h: 1024 },
+    };
+    const { w, h } = sizeMap[aspectRatio] || { w: 1024, h: 1024 };
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${w}&height=${h}&nologo=true&seed=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Pollinations.ai erro ${res.status}`);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Erro ao converter imagem'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  /* fal.ai FLUX.1 Schnell — ~$0.003/imagem, maior qualidade */
   async function _generateImageFal(prompt, { aspectRatio = '1:1' } = {}) {
     const sizeMap = {
       '1:1':  'square_hd',
