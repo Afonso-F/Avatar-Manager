@@ -171,10 +171,12 @@ function renderConfiguracoes(container) {
       <p class="text-sm text-muted mb-2" style="line-height:1.6">
         O workflow <code style="background:var(--bg-elevated);padding:2px 6px;border-radius:4px">.github/workflows/publish.yml</code>
         corre a cada hora e publica automaticamente os posts agendados.<br>
+        O workflow <code style="background:var(--bg-elevated);padding:2px 6px;border-radius:4px">.github/workflows/stripe_payout.yml</code>
+        corre diariamente e processa os levantamentos pendentes via Stripe Connect.<br>
         Adiciona as tuas API keys como <strong>Secrets</strong> no repositório GitHub.
       </p>
       <div class="flex gap-1 flex-wrap">
-        ${['MISTRAL_API_KEY','SUPABASE_URL','SUPABASE_KEY','INSTAGRAM_TOKEN','TIKTOK_TOKEN','FACEBOOK_TOKEN','YOUTUBE_TOKEN'].map(k =>
+        ${['MISTRAL_API_KEY','SUPABASE_URL','SUPABASE_KEY','INSTAGRAM_TOKEN','TIKTOK_TOKEN','FACEBOOK_TOKEN','YOUTUBE_TOKEN','STRIPE_SECRET_KEY'].map(k =>
           `<code style="background:var(--bg-elevated);padding:4px 8px;border-radius:4px;font-size:.8rem;color:var(--accent)">${k}</code>`
         ).join('')}
       </div>
