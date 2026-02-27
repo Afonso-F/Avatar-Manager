@@ -148,6 +148,23 @@ function renderConfiguracoes(container) {
       </div>
     </div>
 
+    <!-- Stripe Connect -->
+    <div class="settings-section">
+      <div class="settings-section-title"><i class="fa-brands fa-stripe" style="color:#635bff"></i> Stripe Connect</div>
+      <div class="form-group mb-0">
+        <label class="form-label">Secret Key <a href="https://dashboard.stripe.com/apikeys" target="_blank" class="text-sm" style="color:var(--accent)">(dashboard)</a></label>
+        <div class="key-field">
+          <input id="cfg-stripe-secret" class="form-control" type="password" value="${cfg.STRIPE_SECRET}" placeholder="sk_live_… ou sk_test_…">
+          <button class="key-toggle" onclick="toggleKeyVisibility('cfg-stripe-secret', this)"><i class="fa-solid fa-eye"></i></button>
+        </div>
+        <div class="form-hint">Usada para processar levantamentos para contas bancárias via Stripe Connect. Usa <code>sk_test_</code> para testes.</div>
+      </div>
+      <div class="mt-2">
+        <button class="btn btn-sm btn-secondary" onclick="testStripe()"><i class="fa-solid fa-flask"></i> Testar conexão</button>
+        <span id="stripe-test-result" class="text-sm ml-1"></span>
+      </div>
+    </div>
+
     <!-- GitHub Actions -->
     <div class="settings-section">
       <div class="settings-section-title"><i class="fa-brands fa-github"></i> GitHub Actions</div>
@@ -191,8 +208,9 @@ function saveAllConfigs() {
     YOUTUBE:      'cfg-youtube',
     FANSLY:       'cfg-fansly',
     SPOTIFY:      'cfg-spotify',
-    FAL_AI:       'cfg-falai',
-    VIDEO_MODEL:  'cfg-video-model',
+    FAL_AI:        'cfg-falai',
+    VIDEO_MODEL:   'cfg-video-model',
+    STRIPE_SECRET: 'cfg-stripe-secret',
   };
   for (const [key, elId] of Object.entries(map)) {
     const el = document.getElementById(elId);
@@ -259,6 +277,26 @@ async function testFalAi() {
   } catch (e) {
     el.innerHTML = `<span style="color:var(--red)"><i class="fa-solid fa-circle-xmark"></i> Erro: ${e.message}</span>`;
     app.toast('Erro fal.ai: ' + e.message, 'error');
+  }
+}
+
+async function testStripe() {
+  const key = document.getElementById('cfg-stripe-secret')?.value.trim();
+  if (!key) { app.toast('Introduz uma Secret Key Stripe primeiro', 'warning'); return; }
+  Config.set('STRIPE_SECRET', key);
+  const el = document.getElementById('stripe-test-result');
+  el.textContent = 'A testar…';
+  try {
+    const ok = await Stripe.testConnection();
+    if (ok) {
+      el.innerHTML = '<span style="color:var(--green)"><i class="fa-solid fa-circle-check"></i> Ligado!</span>';
+      app.toast('Stripe OK!', 'success');
+    } else {
+      throw new Error('Resposta inesperada');
+    }
+  } catch (e) {
+    el.innerHTML = `<span style="color:var(--red)"><i class="fa-solid fa-circle-xmark"></i> Erro: ${e.message}</span>`;
+    app.toast('Erro Stripe: ' + e.message, 'error');
   }
 }
 

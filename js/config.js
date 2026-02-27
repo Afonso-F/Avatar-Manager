@@ -15,6 +15,7 @@ const Config = (() => {
     SPOTIFY:       'as_spotify_token',
     FAL_AI:        'as_fal_ai_key',
     VIDEO_MODEL:   'as_video_model',
+    STRIPE_SECRET: 'as_stripe_secret_key',
   };
 
   // Valores pré-configurados (podem ser sobrescritos nas Configurações)
