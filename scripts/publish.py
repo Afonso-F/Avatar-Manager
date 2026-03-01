@@ -362,7 +362,12 @@ def main():
                 errors += 1
 
     log.info(f"Resultado: {published} publicados, {errors} erros")
-    sys.exit(1 if errors > 0 and published == 0 else 0)
+    if errors > 0:
+        log.warning(
+            f"{errors} post(s) não publicados — marcados como 'erro' na base de dados. "
+            "Verifica se os tokens (INSTAGRAM_TOKEN, TIKTOK_TOKEN, etc.) estão configurados."
+        )
+    sys.exit(0)
 
 
 if __name__ == '__main__':

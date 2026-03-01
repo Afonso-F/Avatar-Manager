@@ -414,8 +414,11 @@ def run(dry_run=False):
         log.error("SUPABASE_URL e SUPABASE_KEY são obrigatórios.")
         sys.exit(1)
     if not stripe_key:
-        log.error("STRIPE_SECRET_KEY é obrigatória.")
-        sys.exit(1)
+        log.warning(
+            "STRIPE_SECRET_KEY não configurada — workflow ignorado. "
+            "Define o secret STRIPE_SECRET_KEY no repositório para activar payouts automáticos."
+        )
+        sys.exit(0)
 
     log.info("=== ContentHub — Payout Automático Diário %s ===",
              "(DRY RUN)" if dry_run else "")

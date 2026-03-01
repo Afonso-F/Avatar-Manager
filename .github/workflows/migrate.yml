@@ -52,6 +52,9 @@ jobs:
             "20260226_youtube_channels_avatar_id"
             "20260226_youtube_channels_refs"
             "20260227_pagamentos_stripe"
+            "20260301_auto_payout"
+            "20260301_video_metadata"
+            "20260301_campanha_posts"
           )
           for v in "${APPLIED[@]}"; do
             supabase migration repair --status applied "$v" \
