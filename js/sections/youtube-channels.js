@@ -5,6 +5,9 @@
 // Estado das imagens de referência no modal de canal
 let _ytRefImagesState = []; // { url, isNew, dataUrl? }
 
+// Estado das imagens de referência no painel de conceito (IA com visão)
+let _conceptImagesYoutube = []; // { dataUrl }
+
 const VIDEO_PLATAFORMAS = {
   youtube:     { label: 'YouTube',     color: '#ff0000', icon: 'fa-brands fa-youtube',      badge: 'badge-red',    rpm_label: 'RPM AdSense' },
   twitch:      { label: 'Twitch',      color: '#9146ff', icon: 'fa-brands fa-twitch',       badge: 'badge-purple', rpm_label: 'Receita por sub' },
@@ -39,9 +42,14 @@ async function renderYoutube(container) {
         <div class="section-title">Canais de Vídeo</div>
         <div class="section-subtitle">YouTube, Twitch, TikTok, Vimeo, Rumble, Dailymotion</div>
       </div>
-      <button class="btn btn-primary" onclick="openYoutubeModal(null)">
-        <i class="fa-solid fa-plus"></i> Novo canal
-      </button>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost" onclick="openYoutubeModal(null, '', true)" title="Cria um canal descrevendo-o em linguagem natural + imagens de referência">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Criar com IA
+        </button>
+        <button class="btn btn-primary" onclick="openYoutubeModal(null)">
+          <i class="fa-solid fa-plus"></i> Novo canal
+        </button>
+      </div>
     </div>
 
     ${canais.length === 0 ? `
@@ -163,7 +171,7 @@ function renderYoutubeCard(c) {
 }
 
 /* ── Modal Criar/Editar Canal ── */
-async function openYoutubeModal(id, preAvatarId = '') {
+async function openYoutubeModal(id, preAvatarId = '', autoExpand = false) {
   let canais = [], avatares = app.getAvatares();
   if (DB.ready()) {
     const { data } = await DB.getYoutubeChannels();
@@ -179,6 +187,7 @@ async function openYoutubeModal(id, preAvatarId = '') {
   const platAtual = c?.plataforma || 'youtube';
 
   _ytRefImagesState = (c?.imagens_referencia || []).map(url => ({ url, isNew: false }));
+  _conceptImagesYoutube = [];
 
   const avatarOpts = avatares.map(a =>
     `<option value="${a.id}" ${String(c?.avatar_id || preAvatarId) === String(a.id) ? 'selected' : ''}>${a.emoji || '🎭'} ${a.nome}</option>`
@@ -198,6 +207,13 @@ async function openYoutubeModal(id, preAvatarId = '') {
       <div class="concept-panel-label"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent)"></i> Descreve o teu canal — a IA preenche tudo</div>
       <textarea id="concept-text-youtube" class="form-control" rows="3"
         placeholder="Ex: Canal de tutoriais de Python para iniciantes, vídeos curtos e directos, foco em automação e IA no dia-a-dia…"></textarea>
+      <div style="margin-top:10px">
+        <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <i class="fa-regular fa-image" style="color:var(--accent)"></i>
+          <span>Imagens de referência para a IA (opcional) — banners, thumbnails ou exemplos visuais do canal</span>
+        </div>
+        <div id="concept-imgs-youtube" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>
+      </div>
       <div class="flex items-center gap-2 mt-2">
         <button class="btn btn-sm btn-primary" onclick="gerarCanalDeConceito()">
           <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA
@@ -293,6 +309,8 @@ async function openYoutubeModal(id, preAvatarId = '') {
   setTimeout(() => {
     updateVideoPlataformaLabels(platAtual);
     _renderYtRefImages();
+    _renderConceptImagesYoutube();
+    if (autoExpand) _toggleConceptBar('youtube', true);
   }, 50);
 }
 
@@ -353,17 +371,20 @@ async function gerarCanalDeConceito() {
   if (progress) progress.textContent = 'A interpretar conceito…';
 
   try {
-    const prompt = `Cria um perfil de canal de vídeo baseado nesta descrição: "${conceito}"
+    const conceptImages = _conceptImagesYoutube.map(img => img.dataUrl);
+    const hasImages = conceptImages.length > 0;
 
+    const prompt = `Cria um perfil de canal de vídeo baseado nesta descrição: "${conceito}"
+${hasImages ? `\nO utilizador forneceu ${conceptImages.length} imagem(ns) de referência visual (banners, thumbnails, etc). Analisa-as e usa-as para:\n- Identificar o estilo visual, cores e identidade do canal\n- Inferir o nicho e tipo de conteúdo pelas imagens\n- Tornar o perfil mais coerente com o que vês nas imagens\n` : ''}
 Responde APENAS com JSON válido, sem markdown, sem backticks:
 {
   "nome": "Nome criativo e memorável para o canal (2-4 palavras)",
   "nicho": "Nicho específico do canal",
   "plataforma": "youtube ou twitch ou tiktok ou vimeo ou rumble ou dailymotion",
-  "notas": "Descrição em português: tipo de conteúdo, audiência alvo, estilo de apresentação, periodicidade sugerida — 2-3 frases"
+  "notas": "Descrição em português: tipo de conteúdo, audiência alvo, estilo de apresentação${hasImages ? ', estilo visual inferido das imagens' : ''}, periodicidade sugerida — 2-3 frases"
 }`;
 
-    const raw  = await AI.generateText(prompt, { temperature: 0.8 });
+    const raw  = await AI.generateText(prompt, { temperature: 0.8, images: conceptImages });
     const m    = raw.match(/\{[\s\S]*\}/);
     const data = JSON.parse(m ? m[0] : raw);
 
@@ -388,6 +409,46 @@ Responde APENAS com JSON válido, sem markdown, sem backticks:
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA'; }
   }
+}
+
+/* ── Imagens de referência no painel de conceito de Canal ── */
+function _renderConceptImagesYoutube() {
+  const grid = document.getElementById('concept-imgs-youtube');
+  if (!grid) return;
+  const items = _conceptImagesYoutube.map((img, i) => `
+    <div style="position:relative;width:56px;height:56px;flex-shrink:0">
+      <img src="${img.dataUrl}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:2px solid var(--accent)">
+      <button onclick="_removeConceptImageYoutube(${i})" title="Remover"
+        style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;background:var(--red);border:none;border-radius:50%;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>`).join('');
+  const addBtn = _conceptImagesYoutube.length < 3 ? `
+    <label title="Adicionar imagem de referência para a IA"
+      style="width:56px;height:56px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;color:var(--text-muted);font-size:1.2rem;transition:border-color .2s"
+      onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <i class="fa-solid fa-plus"></i>
+      <input type="file" accept="image/*" multiple style="display:none" onchange="_addConceptImageYoutube(this)">
+    </label>` : '';
+  grid.innerHTML = items + addBtn;
+}
+
+function _addConceptImageYoutube(input) {
+  const files = Array.from(input.files || []);
+  files.forEach(file => {
+    if (_conceptImagesYoutube.length >= 3) { app.toast('Máximo 3 imagens para o conceito', 'warning'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      _conceptImagesYoutube.push({ dataUrl: e.target.result });
+      _renderConceptImagesYoutube();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function _removeConceptImageYoutube(i) {
+  _conceptImagesYoutube.splice(i, 1);
+  _renderConceptImagesYoutube();
 }
 
 /* ── Imagens de referência do canal ── */

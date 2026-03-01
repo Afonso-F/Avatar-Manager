@@ -5,6 +5,9 @@
 // Estado das imagens de referência no modal de avatar
 let _refImagesState = []; // { url, isNew, dataUrl? }
 
+// Estado das imagens de referência no painel de conceito (IA com visão)
+let _conceptImagesAvatar = []; // { dataUrl }
+
 // Todas as plataformas suportadas
 const PLATAFORMAS_AVATAR = ['instagram','tiktok','facebook','youtube','fansly','onlyfans','patreon','twitch','spotify','vimeo','rumble','dailymotion'];
 
@@ -37,9 +40,14 @@ async function renderAvatares(container) {
         <div class="section-title">Avatares</div>
         <div class="section-subtitle">Gerencie os seus criadores de conteúdo</div>
       </div>
-      <button class="btn btn-primary" onclick="openAvatarModal(null)">
-        <i class="fa-solid fa-plus"></i> Novo avatar
-      </button>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost" onclick="openAvatarModal(null, true)" title="Cria um avatar descrevendo-o em linguagem natural + imagens de referência">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Criar com IA
+        </button>
+        <button class="btn btn-primary" onclick="openAvatarModal(null)">
+          <i class="fa-solid fa-plus"></i> Novo avatar
+        </button>
+      </div>
     </div>
 
     <div class="grid-auto" id="avatarGrid">
@@ -141,20 +149,23 @@ async function gerarAvatarDeConceito() {
   if (progress) progress.textContent = 'A interpretar conceito com IA…';
 
   try {
-    const prompt = `Cria um perfil completo de avatar criador de conteúdo baseado nesta descrição do utilizador: "${conceito}"
+    const conceptImages = _conceptImagesAvatar.map(img => img.dataUrl);
+    const hasImages = conceptImages.length > 0;
 
+    const prompt = `Cria um perfil completo de avatar criador de conteúdo baseado nesta descrição do utilizador: "${conceito}"
+${hasImages ? `\nO utilizador forneceu ${conceptImages.length} imagem(ns) de referência. Analisa-as e usa-as para:\n- Inferir a aparência visual, estilo e estética do avatar\n- Complementar e enriquecer a descrição com detalhes visuais\n- Tornar o perfil mais coerente e específico com o que vês nas imagens\n` : ''}
 Responde APENAS com JSON válido, sem markdown, sem backticks:
 {
-  "nome": "Nome único e criativo (inspirado na descrição, 1-2 palavras)",
-  "nicho": "Nicho específico extraído/inferido da descrição",
+  "nome": "Nome único e criativo (inspirado na descrição${hasImages ? ' e nas imagens' : ''}, 1-2 palavras)",
+  "nicho": "Nicho específico extraído/inferido da descrição${hasImages ? ' e das imagens' : ''}",
   "emoji": "1 emoji representativo",
   "categorias": ["1-3 de: SFW, NSFW, Anime, Cosplay, Realista, Lifestyle, Gaming, Music, Fitness, Art"],
   "plataformas": ["2-4 de: instagram, tiktok, facebook, youtube, fansly, onlyfans, patreon, twitch, spotify"],
-  "prompt_base": "Personalidade detalhada em português baseada na descrição — 3-4 frases sobre estilo, tom, conteúdo e forma de interagir com a audiência"
+  "prompt_base": "Personalidade detalhada em português baseada na descrição${hasImages ? ' e no estilo visual das imagens' : ''} — 3-4 frases sobre estilo, tom, conteúdo e forma de interagir com a audiência"
 }
 Interpreta e complementa criativamente o que faltar na descrição.`;
 
-    const raw  = await AI.generateText(prompt, { temperature: 0.85 });
+    const raw  = await AI.generateText(prompt, { temperature: 0.85, images: conceptImages });
     const m    = raw.match(/\{[\s\S]*\}/);
     const data = JSON.parse(m ? m[0] : raw);
 
@@ -188,6 +199,46 @@ Interpreta e complementa criativamente o que faltar na descrição.`;
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA'; }
   }
+}
+
+/* ── Imagens de referência no painel de conceito de Avatar ── */
+function _renderConceptImagesAvatar() {
+  const grid = document.getElementById('concept-imgs-avatar');
+  if (!grid) return;
+  const items = _conceptImagesAvatar.map((img, i) => `
+    <div style="position:relative;width:56px;height:56px;flex-shrink:0">
+      <img src="${img.dataUrl}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:2px solid var(--accent)">
+      <button onclick="_removeConceptImageAvatar(${i})" title="Remover"
+        style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;background:var(--red);border:none;border-radius:50%;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>`).join('');
+  const addBtn = _conceptImagesAvatar.length < 3 ? `
+    <label title="Adicionar imagem de referência para a IA"
+      style="width:56px;height:56px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;color:var(--text-muted);font-size:1.2rem;transition:border-color .2s"
+      onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <i class="fa-solid fa-plus"></i>
+      <input type="file" accept="image/*" multiple style="display:none" onchange="_addConceptImageAvatar(this)">
+    </label>` : '';
+  grid.innerHTML = items + addBtn;
+}
+
+function _addConceptImageAvatar(input) {
+  const files = Array.from(input.files || []);
+  files.forEach(file => {
+    if (_conceptImagesAvatar.length >= 3) { app.toast('Máximo 3 imagens para o conceito', 'warning'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      _conceptImagesAvatar.push({ dataUrl: e.target.result });
+      _renderConceptImagesAvatar();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function _removeConceptImageAvatar(i) {
+  _conceptImagesAvatar.splice(i, 1);
+  _renderConceptImagesAvatar();
 }
 
 /* ── Dashboard do Avatar ── */
@@ -345,12 +396,13 @@ function switchAvDashTab(tab, btn) {
   }
 }
 
-function openAvatarModal(id) {
+function openAvatarModal(id, autoExpand = false) {
   const avatares = app.getAvatares();
   const a = id ? avatares.find(x => String(x.id) === String(id)) : null;
   const isNew = !a;
 
   _refImagesState = (a?.imagens_referencia || []).map(url => ({ url, isNew: false }));
+  _conceptImagesAvatar = [];
   const avatarCats = Array.isArray(a?.categorias) ? a.categorias : [];
 
   const body = `
@@ -367,6 +419,13 @@ function openAvatarModal(id) {
       <div class="concept-panel-label"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent)"></i> Descreve o teu conceito de avatar — a IA preenche tudo</div>
       <textarea id="concept-text-avatar" class="form-control" rows="3"
         placeholder="Ex: Criadora de fitness para mulheres acima dos 40, treinos em casa, tom motivador e realista, partilha refeições e rotinas…"></textarea>
+      <div style="margin-top:10px">
+        <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <i class="fa-regular fa-image" style="color:var(--accent)"></i>
+          <span>Imagens de referência para a IA (opcional) — a IA analisa o visual e enriquece o perfil</span>
+        </div>
+        <div id="concept-imgs-avatar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>
+      </div>
       <div class="flex items-center gap-2 mt-2">
         <button class="btn btn-sm btn-primary" onclick="gerarAvatarDeConceito()">
           <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA
@@ -434,7 +493,11 @@ function openAvatarModal(id) {
     </button>`;
 
   app.openModal(isNew ? 'Novo avatar' : `Editar — ${a.nome}`, body, footer);
-  setTimeout(() => _renderRefImages(), 0);
+  setTimeout(() => {
+    _renderRefImages();
+    _renderConceptImagesAvatar();
+    if (autoExpand) _toggleConceptBar('avatar', true);
+  }, 0);
 }
 
 function toggleCategoryChip(el) {
