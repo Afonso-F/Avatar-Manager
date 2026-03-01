@@ -2,12 +2,16 @@
    sections/criar-post.js
    ============================================================ */
 let _criarState = {
-  imageDataUrl:    null,
-  imagePromptUsed: null,
-  videoDataUrl:    null,
-  videoExternalUrl:null, // URL externa do fal.ai
-  contentType:     'image', // 'image' | 'video'
-  platformCaptions: {},   // { instagram: '...', tiktok: '...', ... }
+  imageDataUrl:     null,
+  imagePromptUsed:  null,
+  videoDataUrl:     null,
+  videoExternalUrl: null,   // URL externa do fal.ai
+  contentType:      'image', // 'image' | 'video'
+  platformCaptions: {},     // { instagram: '...', tiktok: '...', ... }
+  // Contexto IA
+  aiPrevPosts:       [],    // últimos posts do avatar carregados
+  aiSelectedPostIds: [],    // ids dos posts incluídos no contexto
+  aiLibRefs:         [],    // referências da biblioteca seleccionadas [{id, titulo, prompt}]
 };
 
 async function renderCriarPost(container) {
@@ -65,6 +69,72 @@ async function renderCriarPost(container) {
                    id="av-sel-${a.id}" data-avid="${a.id}" onclick="selectAvatar('${a.id}')">
                 ${a.emoji || '🎭'} ${a.nome}
               </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- Gerar com IA (contexto) -->
+        <div class="card" style="border-left:3px solid var(--accent)">
+          <div class="card-header" style="cursor:pointer" onclick="toggleAiContextPanel()">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px">
+              <i class="fa-solid fa-brain" style="color:var(--accent)"></i>
+              Gerar com IA
+              <span class="badge" style="background:var(--accent);color:#fff;font-size:.7rem">NOVO</span>
+            </div>
+            <i class="fa-solid fa-chevron-up text-muted" id="cp-ai-chevron"></i>
+          </div>
+          <div id="cp-ai-panel">
+            <!-- Prompt único -->
+            <div class="form-group mb-2" style="padding:0 0 0 0">
+              <label class="form-label">Descreve o post que queres criar</label>
+              <textarea id="cp-ai-prompt" class="form-control" rows="2"
+                placeholder="Ex: yoga na praia ao pôr-do-sol, tons dourados, energia positiva…"></textarea>
+            </div>
+
+            <!-- Posts anteriores -->
+            <div style="margin-bottom:10px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+                <span class="form-label mb-0" style="font-size:.8rem">
+                  <i class="fa-solid fa-clock-rotate-left" style="color:var(--accent)"></i>
+                  Posts anteriores <span class="text-muted">(clica para incluir/excluir do contexto)</span>
+                </span>
+                <button class="btn btn-ghost btn-sm" onclick="loadAiPrevPosts()" title="Actualizar">
+                  <i class="fa-solid fa-rotate"></i>
+                </button>
+              </div>
+              <div id="cp-ai-prev-posts" style="display:flex;flex-wrap:wrap;gap:6px">
+                <span class="text-sm text-muted">Selecciona um avatar para carregar posts anteriores.</span>
+              </div>
+            </div>
+
+            <!-- Referências da biblioteca -->
+            <div style="margin-bottom:12px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+                <span class="form-label mb-0" style="font-size:.8rem">
+                  <i class="fa-solid fa-images" style="color:var(--accent)"></i>
+                  Referências da biblioteca <span class="text-muted">(opcional)</span>
+                </span>
+                <button class="btn btn-ghost btn-sm" onclick="openAiLibRefPicker()">
+                  <i class="fa-solid fa-plus"></i> Adicionar
+                </button>
+              </div>
+              <div id="cp-ai-lib-refs" style="display:flex;flex-wrap:wrap;gap:6px">
+                <span class="text-sm text-muted" id="cp-ai-lib-refs-empty">Nenhuma referência seleccionada.</span>
+              </div>
+            </div>
+
+            <!-- Opção: gerar imagem automático -->
+            <div style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:8px;font-size:.85rem;cursor:pointer">
+                <input type="checkbox" id="cp-ai-auto-img" checked>
+                Gerar imagem automaticamente
+              </label>
+            </div>
+
+            <!-- Botão gerar -->
+            <button class="btn btn-primary" style="width:100%" id="cp-ai-gen-btn" onclick="generatePostFromContext()">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar post completo com IA
+            </button>
+            <div id="cp-ai-status" class="text-sm text-muted mt-2" style="text-align:center;min-height:18px"></div>
           </div>
         </div>
 
@@ -275,6 +345,9 @@ async function renderCriarPost(container) {
     document.getElementById('cp-preview-caption').textContent = e.target.value || 'A legenda aparece aqui…';
     document.getElementById('cp-caption-count').textContent = `${e.target.value.length} caracteres`;
   });
+
+  // Carregar posts anteriores para o painel IA
+  loadAiPrevPosts();
 
   // Pré-preencher prompt vindo da Biblioteca
   const _libRaw = localStorage.getItem('as_library_prompt');
@@ -491,6 +564,8 @@ function selectAvatar(id) {
       if (active) el.classList.add(p); else el.classList.remove(p);
     });
   }
+  // Actualizar posts anteriores no painel IA
+  loadAiPrevPosts();
 }
 
 function toggleCriarPlatform(el) {
@@ -502,6 +577,229 @@ function toggleCriarPlatform(el) {
 
 function getSelectedPlatforms() {
   return [...document.querySelectorAll('#cp-platforms .platform-toggle.active')].map(el => el.dataset.p);
+}
+
+/* ── Painel IA: toggle ── */
+function toggleAiContextPanel() {
+  const panel   = document.getElementById('cp-ai-panel');
+  const chevron = document.getElementById('cp-ai-chevron');
+  if (!panel) return;
+  const hidden = panel.style.display === 'none';
+  panel.style.display   = hidden ? '' : 'none';
+  if (chevron) chevron.className = `fa-solid fa-chevron-${hidden ? 'up' : 'down'} text-muted`;
+}
+
+/* ── Painel IA: carregar posts anteriores ── */
+async function loadAiPrevPosts() {
+  const el = document.getElementById('cp-ai-prev-posts');
+  if (!el) return;
+
+  const avatarId = getSelectedAvatarId();
+  if (!avatarId || !DB.ready()) {
+    el.innerHTML = '<span class="text-sm text-muted">Selecciona um avatar para carregar posts anteriores.</span>';
+    return;
+  }
+
+  el.innerHTML = '<span class="text-sm text-muted"><i class="fa-solid fa-spinner fa-spin"></i> A carregar…</span>';
+  try {
+    const { data: posts } = await DB.getPosts({ avatar_id: avatarId, limit: 6 });
+    _criarState.aiPrevPosts       = posts || [];
+    _criarState.aiSelectedPostIds = (posts || []).map(p => p.id); // todos seleccionados por defeito
+    _renderAiPrevPosts();
+  } catch (e) {
+    el.innerHTML = `<span class="text-sm text-muted">Erro ao carregar: ${e.message}</span>`;
+  }
+}
+
+function _renderAiPrevPosts() {
+  const el = document.getElementById('cp-ai-prev-posts');
+  if (!el) return;
+  const posts = _criarState.aiPrevPosts;
+  if (!posts.length) {
+    el.innerHTML = '<span class="text-sm text-muted">Sem posts anteriores para este avatar.</span>';
+    return;
+  }
+  el.innerHTML = posts.map(p => {
+    const selected = _criarState.aiSelectedPostIds.includes(p.id);
+    const preview  = (p.legenda || '').slice(0, 55) + ((p.legenda || '').length > 55 ? '…' : '');
+    return `<div class="chip${selected ? ' chip-active' : ''}"
+                 onclick="toggleAiPrevPost('${p.id}')"
+                 title="${escHtml(p.legenda || '')}"
+                 style="cursor:pointer;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+                        background:${selected ? 'var(--accent)' : 'var(--bg-elevated)'};
+                        color:${selected ? '#fff' : 'var(--text-secondary)'};
+                        border:1px solid ${selected ? 'var(--accent)' : 'var(--border)'};
+                        border-radius:var(--radius-sm);padding:4px 8px;font-size:.78rem">
+              <i class="fa-solid fa-${selected ? 'check' : 'circle'}" style="margin-right:4px;font-size:.7rem"></i>${escHtml(preview)}
+            </div>`;
+  }).join('');
+}
+
+function toggleAiPrevPost(postId) {
+  const idx = _criarState.aiSelectedPostIds.indexOf(postId);
+  if (idx >= 0) _criarState.aiSelectedPostIds.splice(idx, 1);
+  else          _criarState.aiSelectedPostIds.push(postId);
+  _renderAiPrevPosts();
+}
+
+/* ── Painel IA: referências da biblioteca ── */
+async function openAiLibRefPicker() {
+  let items = [];
+  if (DB.ready()) {
+    const { data } = await DB.getPromptLibrary({});
+    items = data || [];
+  }
+  if (!items.length) {
+    app.toast('Sem referências na biblioteca. Adiciona primeiro em Biblioteca.', 'warning');
+    return;
+  }
+
+  const alreadyIds = _criarState.aiLibRefs.map(r => r.id);
+  const body = `
+    <div style="margin-bottom:10px">
+      <input class="form-control" placeholder="Pesquisar…" oninput="this.nextElementSibling.querySelectorAll('[data-title]').forEach(el=>{el.style.display=el.dataset.title.toLowerCase().includes(this.value.toLowerCase())?'':'none'})">
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;margin-top:8px;padding-right:4px">
+        ${items.map(item => {
+          const sel = alreadyIds.includes(item.id);
+          return `<div data-title="${escHtml(item.titulo || '')}"
+                       style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:var(--radius-sm);
+                              border:1px solid ${sel ? 'var(--accent)' : 'var(--border)'};
+                              background:${sel ? 'rgba(var(--accent-rgb),0.08)' : 'var(--bg-elevated)'};
+                              cursor:pointer"
+                       onclick="_toggleAiLibRef(this,'${item.id}','${escHtml(item.titulo||'')}','${escHtml((item.prompt||'').slice(0,200))}')">
+                    <input type="checkbox" ${sel ? 'checked' : ''} style="pointer-events:none">
+                    <div>
+                      <div style="font-weight:600;font-size:.85rem">${escHtml(item.titulo || '—')}</div>
+                      <div class="text-sm text-muted">${escHtml((item.prompt || '').slice(0, 80))}${(item.prompt||'').length>80?'…':''}</div>
+                    </div>
+                  </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+  app.openModal('Adicionar referências ao contexto IA', body,
+    '<button class="btn btn-primary" onclick="app.closeModal()">Confirmar</button>');
+}
+
+function _toggleAiLibRef(el, id, titulo, prompt) {
+  const idx = _criarState.aiLibRefs.findIndex(r => r.id === id);
+  const cb  = el.querySelector('input[type=checkbox]');
+  if (idx >= 0) {
+    _criarState.aiLibRefs.splice(idx, 1);
+    el.style.border     = '1px solid var(--border)';
+    el.style.background = 'var(--bg-elevated)';
+    if (cb) cb.checked = false;
+  } else {
+    _criarState.aiLibRefs.push({ id, titulo, prompt });
+    el.style.border     = '1px solid var(--accent)';
+    el.style.background = 'rgba(var(--accent-rgb),0.08)';
+    if (cb) cb.checked = true;
+  }
+  _renderAiLibRefs();
+}
+
+function _renderAiLibRefs() {
+  const el    = document.getElementById('cp-ai-lib-refs');
+  const empty = document.getElementById('cp-ai-lib-refs-empty');
+  if (!el) return;
+  const refs = _criarState.aiLibRefs;
+  if (!refs.length) {
+    if (empty) empty.style.display = '';
+    el.querySelectorAll('.ai-lib-chip').forEach(c => c.remove());
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  // Re-render chips
+  el.querySelectorAll('.ai-lib-chip').forEach(c => c.remove());
+  refs.forEach(r => {
+    const chip = document.createElement('div');
+    chip.className = 'ai-lib-chip';
+    chip.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:var(--radius-sm);background:var(--accent);color:#fff;font-size:.78rem';
+    chip.innerHTML = `<i class="fa-solid fa-image"></i>${escHtml(r.titulo)}<button onclick="_removeAiLibRef('${r.id}')" style="background:none;border:none;color:#fff;cursor:pointer;padding:0;line-height:1"><i class="fa-solid fa-xmark"></i></button>`;
+    el.appendChild(chip);
+  });
+}
+
+function _removeAiLibRef(id) {
+  _criarState.aiLibRefs = _criarState.aiLibRefs.filter(r => r.id !== id);
+  _renderAiLibRefs();
+}
+
+/* ── Painel IA: gerar post completo ── */
+async function generatePostFromContext() {
+  const userPrompt = document.getElementById('cp-ai-prompt')?.value.trim();
+  if (!userPrompt) { app.toast('Escreve o que queres criar no campo de prompt acima.', 'warning'); return; }
+
+  const avatar = app.getActiveAvatar();
+  if (!avatar) { app.toast('Seleciona um avatar.', 'warning'); return; }
+
+  const btn    = document.getElementById('cp-ai-gen-btn');
+  const status = document.getElementById('cp-ai-status');
+
+  btn.disabled  = true;
+  btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px"></div> A gerar…';
+  status.textContent = 'A consultar IA com o contexto dos teus posts…';
+
+  try {
+    // Posts seleccionados como contexto
+    const prevPosts = _criarState.aiPrevPosts.filter(p =>
+      _criarState.aiSelectedPostIds.includes(p.id)
+    );
+
+    const result = await AI.generatePostFromPrompt(
+      avatar,
+      userPrompt,
+      prevPosts,
+      _criarState.aiLibRefs
+    );
+
+    // Preencher campos
+    if (result.legenda) {
+      const capEl = document.getElementById('cp-caption');
+      if (capEl) {
+        capEl.value = result.legenda;
+        document.getElementById('cp-preview-caption').textContent = result.legenda;
+        document.getElementById('cp-caption-count').textContent   = `${result.legenda.length} caracteres`;
+      }
+    }
+    if (result.hashtags) {
+      const hashEl = document.getElementById('cp-hashtags');
+      if (hashEl) hashEl.value = result.hashtags;
+    }
+    if (result.imagem_prompt) {
+      const promptEl = document.getElementById('cp-img-prompt');
+      if (promptEl) promptEl.value = result.imagem_prompt;
+      // Preencher também o campo de tema
+      const topicEl = document.getElementById('cp-topic');
+      if (topicEl && !topicEl.value) topicEl.value = userPrompt;
+    }
+
+    status.textContent = 'Post gerado! ✓';
+    app.toast('Post gerado com base nos teus posts anteriores!', 'success');
+
+    // Gerar imagem automaticamente se opção activada
+    const autoImg = document.getElementById('cp-ai-auto-img')?.checked;
+    if (autoImg && result.imagem_prompt) {
+      status.textContent = 'A gerar imagem…';
+      try {
+        const dataUrl = await AI.generateImage(result.imagem_prompt);
+        _criarState.imageDataUrl = dataUrl;
+        setPreviewImage(dataUrl);
+        const hBtn = document.getElementById('cp-hashtag-img-btn');
+        if (hBtn) hBtn.style.display = '';
+        document.getElementById('cp-save-lib-img')?.style.setProperty('display', '');
+        status.textContent = 'Post e imagem gerados! ✓';
+      } catch (imgErr) {
+        status.textContent = 'Post gerado, mas erro na imagem: ' + imgErr.message;
+      }
+    }
+  } catch (e) {
+    status.textContent = 'Erro: ' + e.message;
+    app.toast('Erro ao gerar: ' + e.message, 'error');
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Gerar post completo com IA';
+  }
 }
 
 async function generateAll() {

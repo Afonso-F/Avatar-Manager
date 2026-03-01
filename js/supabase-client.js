@@ -507,5 +507,14 @@ const DB = (() => {
     }
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, updateYoutubeRefImages, uploadYoutubeReferenceImage, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage, getOnlyfansStats, upsertOnlyfansStats, getPatreonStats, upsertPatreonStats, getTwitchStats, upsertTwitchStats, getAfiliados, upsertAfiliado, deleteAfiliado, getVendasDiretas, upsertVendaDireta, deleteVendaDireta, getContasBancarias, upsertContaBancaria, deleteContaBancaria, getLevantamentos, upsertLevantamento };
+  /* Posts de uma campanha específica */
+  async function getCampanhaPosts(campanha_id) {
+    if (!_client) return { data: [], error: 'not connected' };
+    return _client.from('posts')
+      .select('*, avatares(nome, nicho)')
+      .eq('campanha_id', campanha_id)
+      .order('agendado_para', { ascending: true });
+  }
+
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, updateYoutubeRefImages, uploadYoutubeReferenceImage, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getCampanhaPosts, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage, getOnlyfansStats, upsertOnlyfansStats, getPatreonStats, upsertPatreonStats, getTwitchStats, upsertTwitchStats, getAfiliados, upsertAfiliado, deleteAfiliado, getVendasDiretas, upsertVendaDireta, deleteVendaDireta, getContasBancarias, upsertContaBancaria, deleteContaBancaria, getLevantamentos, upsertLevantamento };
 })();

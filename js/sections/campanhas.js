@@ -49,9 +49,14 @@ async function renderCampanhas(container) {
         <div class="section-title">Campanhas</div>
         <div class="section-subtitle">Publicidade &amp; promoções dos teus avatares</div>
       </div>
-      <button class="btn btn-primary" onclick="openCampanhaForm()">
-        <i class="fa-solid fa-plus"></i> Nova Campanha
-      </button>
+      <div class="flex gap-1">
+        <button class="btn btn-secondary" onclick="openCampanhaForm()">
+          <i class="fa-solid fa-plus"></i> Nova Campanha
+        </button>
+        <button class="btn btn-primary" onclick="openAiCampanhaWizard()">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar com IA
+        </button>
+      </div>
     </div>
 
     <!-- KPIs -->
@@ -172,6 +177,9 @@ function _campCard(c) {
           ${c.descricao ? `<div style="font-size:.8rem;color:var(--text-muted);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.descricao}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-sm btn-secondary" onclick="campTogglePosts('${c.id}')" title="Ver posts desta campanha">
+            <i class="fa-solid fa-layer-group"></i> Posts
+          </button>
           <button class="btn btn-sm btn-secondary btn-icon" onclick="editCampanha('${c.id}')" title="Editar">
             <i class="fa-solid fa-pen"></i>
           </button>
@@ -179,6 +187,11 @@ function _campCard(c) {
             <i class="fa-solid fa-trash"></i>
           </button>
         </div>
+      </div>
+
+      <!-- Posts da campanha (expandível) -->
+      <div id="camp-posts-${c.id}" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+        <div class="spinner" style="margin:8px auto"></div>
       </div>
 
       <!-- Budget bar -->
@@ -374,4 +387,350 @@ async function deleteCampanha(id) {
   _campState.items = _campState.items.filter(c => String(c.id) !== String(id));
   app.toast('Campanha apagada', 'success');
   _campFilter();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   POSTS DA CAMPANHA (expandível no card)
+═══════════════════════════════════════════════════════════ */
+async function campTogglePosts(campId) {
+  const el = document.getElementById(`camp-posts-${campId}`);
+  if (!el) return;
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : '';
+  if (open) return;
+
+  el.innerHTML = '<div class="spinner" style="margin:8px auto"></div>';
+
+  const { data: posts } = await DB.getCampanhaPosts(campId);
+  if (!posts?.length) {
+    el.innerHTML = `
+      <div class="text-sm text-muted" style="text-align:center;padding:8px">
+        Sem posts nesta campanha.
+        <button class="btn btn-sm btn-primary" style="margin-left:8px" onclick="openAiCampanhaWizard('${campId}')">
+          <i class="fa-solid fa-plus"></i> Gerar posts
+        </button>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);margin-bottom:8px">
+      ${posts.length} post(s) nesta campanha
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${posts.map(p => {
+        const icon = p.tipo_conteudo === 'video' ? 'fa-film' : 'fa-image';
+        const date = p.agendado_para
+          ? new Date(p.agendado_para).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+          : '—';
+        return `
+          <div style="display:flex;align-items:center;gap:10px;background:var(--bg);border-radius:6px;padding:8px 10px">
+            ${p.imagem_url
+              ? `<img src="${p.imagem_url}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0">`
+              : `<div style="width:36px;height:36px;background:var(--bg-elevated);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid ${icon} text-muted" style="font-size:.8rem"></i></div>`}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((p.legenda || '').slice(0,80))}</div>
+              <div style="font-size:.72rem;color:var(--text-muted)">${date} · ${(p.plataformas || []).join(', ')} · ${app.statusBadge(p.status)}</div>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   WIZARD: GERAR CAMPANHA COM IA
+═══════════════════════════════════════════════════════════ */
+let _aiCampWizard = { step: 1, config: {}, generatedPosts: [] };
+
+function openAiCampanhaWizard(existingCampId) {
+  const avatares = _campState.avatares;
+  const hoje     = new Date().toISOString().slice(0, 10);
+  const PLATS    = ['instagram', 'tiktok', 'youtube', 'facebook'];
+
+  _aiCampWizard = { step: 1, config: {}, generatedPosts: [], existingCampId: existingCampId || null };
+
+  const body = `
+    <!-- Prompt -->
+    <div class="form-group">
+      <label class="form-label">Prompt da campanha *</label>
+      <textarea id="wiz-prompt" class="form-control" rows="3"
+        placeholder="Descreve o tema, objetivo e tom da campanha…
+Ex: Semana de yoga matinal para iniciantes — criar um hábito saudável com energia positiva"></textarea>
+      <div class="form-hint">Quanto mais detalhe deres, mais coerente será a série de posts gerada.</div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Avatar -->
+      <div class="form-group">
+        <label class="form-label">Avatar *</label>
+        <select id="wiz-avatar" class="form-control">
+          <option value="">— Selecciona —</option>
+          ${avatares.map(a => {
+            const isActive = app.getActiveAvatar()?.id === a.id;
+            return `<option value="${a.id}" ${isActive ? 'selected' : ''}>${a.emoji || ''} ${a.nome}</option>`;
+          }).join('')}
+        </select>
+      </div>
+
+      <!-- Nome (opcional) -->
+      <div class="form-group">
+        <label class="form-label">Nome da campanha <span class="text-muted text-sm">(opcional)</span></label>
+        <input id="wiz-nome" class="form-control" placeholder="Gerado pela IA se vazio">
+      </div>
+
+      <!-- Data início -->
+      <div class="form-group">
+        <label class="form-label">Data de início</label>
+        <input id="wiz-inicio" class="form-control" type="date" value="${hoje}">
+      </div>
+
+      <!-- Duração -->
+      <div class="form-group">
+        <label class="form-label">Duração</label>
+        <select id="wiz-duracao" class="form-control">
+          <option value="7" selected>7 dias (1 semana)</option>
+          <option value="14">14 dias (2 semanas)</option>
+          <option value="30">30 dias (1 mês)</option>
+        </select>
+      </div>
+
+      <!-- Nº de posts -->
+      <div class="form-group">
+        <label class="form-label">Nº de posts</label>
+        <select id="wiz-count" class="form-control">
+          <option value="3">3 posts</option>
+          <option value="5" selected>5 posts</option>
+          <option value="7">7 posts</option>
+        </select>
+      </div>
+
+      <!-- Horário -->
+      <div class="form-group">
+        <label class="form-label">Horário de publicação</label>
+        <input id="wiz-hora" class="form-control" type="time" value="10:00">
+      </div>
+
+      <!-- Tipo -->
+      <div class="form-group">
+        <label class="form-label">Tipo de conteúdo</label>
+        <select id="wiz-tipo" class="form-control">
+          <option value="imagem" selected>Imagem</option>
+          <option value="video">Vídeo curto</option>
+        </select>
+      </div>
+
+      <!-- Objetivo -->
+      <div class="form-group">
+        <label class="form-label">Objetivo</label>
+        <select id="wiz-obj" class="form-control">
+          ${Object.entries(CAMP_OBJETIVO).map(([k, v]) =>
+            `<option value="${k}" ${k === 'engagement' ? 'selected' : ''}>${v}</option>`
+          ).join('')}
+        </select>
+      </div>
+    </div>
+
+    <!-- Plataformas -->
+    <div class="form-group">
+      <label class="form-label">Publicar em</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${PLATS.map(p => `
+          <label style="display:flex;align-items:center;gap:5px;font-size:.85rem;cursor:pointer">
+            <input type="checkbox" value="${p}" class="wiz-plat-check" checked> ${app.platformIcon(p)} ${p}
+          </label>`).join('')}
+      </div>
+    </div>
+
+    <div id="wiz-error" style="color:var(--red);font-size:.85rem;display:none;margin-top:4px"></div>`;
+
+  const footer = `
+    <button class="btn btn-secondary" onclick="app.closeModal()">Cancelar</button>
+    <button class="btn btn-primary" id="wiz-gen-btn" onclick="_wizGenerate()">
+      <i class="fa-solid fa-wand-magic-sparkles"></i> Gerar posts com IA
+    </button>`;
+
+  app.openModal('Gerar Campanha com IA', body, footer);
+  setTimeout(() => document.getElementById('wiz-prompt')?.focus(), 100);
+}
+
+async function _wizGenerate() {
+  const prompt   = document.getElementById('wiz-prompt')?.value.trim();
+  const avatarId = document.getElementById('wiz-avatar')?.value;
+  const errEl    = document.getElementById('wiz-error');
+  const btn      = document.getElementById('wiz-gen-btn');
+
+  if (!prompt)   { errEl.textContent = 'O prompt é obrigatório.'; errEl.style.display = ''; return; }
+  if (!avatarId) { errEl.textContent = 'Selecciona um avatar.';   errEl.style.display = ''; return; }
+  errEl.style.display = 'none';
+
+  const avatar    = _campState.avatares.find(a => a.id === avatarId);
+  const count     = parseInt(document.getElementById('wiz-count')?.value    || '5', 10);
+  const duracao   = parseInt(document.getElementById('wiz-duracao')?.value  || '7', 10);
+  const inicio    = document.getElementById('wiz-inicio')?.value;
+  const hora      = document.getElementById('wiz-hora')?.value || '10:00';
+  const tipo      = document.getElementById('wiz-tipo')?.value || 'imagem';
+  const obj       = document.getElementById('wiz-obj')?.value  || 'engagement';
+  const nome      = document.getElementById('wiz-nome')?.value.trim();
+  const plats     = [...document.querySelectorAll('.wiz-plat-check:checked')].map(e => e.value);
+
+  _aiCampWizard.config = { prompt, avatar, count, duracao, inicio, hora, tipo, obj, nome, plats };
+
+  btn.disabled  = true;
+  btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px"></div> A gerar…';
+
+  try {
+    // Carregar posts anteriores do avatar como contexto de estilo
+    let prevPosts = [];
+    if (DB.ready()) {
+      const { data } = await DB.getPosts({ avatar_id: avatarId, limit: 5 });
+      prevPosts = data || [];
+    }
+
+    const posts = await AI.generateCampaignPosts(avatar, prompt, { count, contentType: tipo, prevPosts });
+    _aiCampWizard.generatedPosts = posts;
+
+    // Calcular datas distribuídas ao longo da duração
+    const startDate  = new Date(`${inicio}T${hora}:00`);
+    const intervalMs = (duracao / count) * 24 * 60 * 60 * 1000;
+    posts.forEach((p, i) => {
+      const d = new Date(startDate.getTime() + i * intervalMs);
+      p._scheduledAt = d.toISOString().slice(0, 16);
+    });
+
+    _wizShowReview();
+  } catch (e) {
+    errEl.textContent = 'Erro ao gerar: ' + e.message;
+    errEl.style.display = '';
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Gerar posts com IA';
+  }
+}
+
+function _wizShowReview() {
+  const posts  = _aiCampWizard.generatedPosts;
+  const config = _aiCampWizard.config;
+  const isVideo = config.tipo === 'video';
+
+  const body = `
+    <div style="margin-bottom:12px;padding:10px;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+      <div style="font-size:.85rem;font-weight:600">
+        <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent)"></i>
+        ${posts.length} posts gerados para ${config.duracao} dias · ${config.avatar?.nome}
+      </div>
+      <div class="text-sm text-muted">Revê e edita cada post abaixo. Os campos são editáveis.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px;max-height:60vh;overflow-y:auto;padding-right:4px">
+      ${posts.map((p, i) => `
+        <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px" id="wiz-post-${i}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span class="badge" style="background:var(--accent);color:#fff">Dia ${p.dia || i+1}</span>
+            <span style="font-weight:600;font-size:.88rem">${escHtml(p.titulo || '')}</span>
+            <span style="margin-left:auto;font-size:.75rem;color:var(--text-muted)">${p._scheduledAt || ''}</span>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label" style="font-size:.75rem">Legenda</label>
+            <textarea class="form-control wiz-legenda" data-idx="${i}" rows="3">${escHtml(p.legenda || '')}</textarea>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label" style="font-size:.75rem">Hashtags</label>
+            <textarea class="form-control wiz-hashtags" data-idx="${i}" rows="2">${escHtml(p.hashtags || '')}</textarea>
+          </div>
+          <div class="form-group mb-2">
+            <label class="form-label" style="font-size:.75rem">Prompt ${isVideo ? 'de vídeo' : 'de imagem'}</label>
+            <textarea class="form-control wiz-media" data-idx="${i}" rows="2">${escHtml(p.prompt_media || '')}</textarea>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label" style="font-size:.75rem">Data / hora agendada</label>
+            <input class="form-control wiz-schedule" data-idx="${i}" type="datetime-local" value="${p._scheduledAt || ''}">
+          </div>
+        </div>`).join('')}
+    </div>
+    <div id="wiz-save-error" style="color:var(--red);font-size:.85rem;display:none;margin-top:8px"></div>`;
+
+  const footer = `
+    <button class="btn btn-secondary" onclick="openAiCampanhaWizard()">← Voltar</button>
+    <button class="btn btn-primary" id="wiz-save-btn" onclick="_wizSaveAll()">
+      <i class="fa-solid fa-calendar-plus"></i> Confirmar e Agendar
+    </button>`;
+
+  app.openModal('Rever e Agendar Campanha', body, footer);
+}
+
+async function _wizSaveAll() {
+  const config = _aiCampWizard.config;
+  const btn    = document.getElementById('wiz-save-btn');
+  const errEl  = document.getElementById('wiz-save-error');
+
+  // Ler edições dos campos
+  const posts = _aiCampWizard.generatedPosts.map((p, i) => ({
+    ...p,
+    legenda:      document.querySelector(`.wiz-legenda[data-idx="${i}"]`)?.value.trim()    || p.legenda,
+    hashtags:     document.querySelector(`.wiz-hashtags[data-idx="${i}"]`)?.value.trim()   || p.hashtags,
+    prompt_media: document.querySelector(`.wiz-media[data-idx="${i}"]`)?.value.trim()      || p.prompt_media,
+    _scheduledAt: document.querySelector(`.wiz-schedule[data-idx="${i}"]`)?.value          || p._scheduledAt,
+  }));
+
+  if (!DB.ready()) { errEl.textContent = 'BD não conectada.'; errEl.style.display = ''; return; }
+
+  btn.disabled  = true;
+  btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px"></div> A guardar…';
+
+  try {
+    // 1. Criar campanha
+    const fim = new Date(config.inicio);
+    fim.setDate(fim.getDate() + config.duracao);
+
+    const campObj = {
+      nome:        config.nome || `Campanha IA — ${config.prompt.slice(0, 40)}`,
+      descricao:   config.prompt,
+      objetivo:    config.obj,
+      status:      'planeamento',
+      avatar_id:   config.avatar?.id || null,
+      plataformas: config.plats,
+      data_inicio: config.inicio,
+      data_fim:    fim.toISOString().slice(0, 10),
+    };
+    if (_aiCampWizard.existingCampId) campObj.id = _aiCampWizard.existingCampId;
+
+    const { data: savedCamp, error: campErr } = await DB.upsertCampanha(campObj);
+    if (campErr) throw new Error('Erro ao criar campanha: ' + (campErr.message || campErr));
+
+    const campId = savedCamp?.id || _aiCampWizard.existingCampId;
+
+    // 2. Criar posts ligados à campanha
+    const isVideo = config.tipo === 'video';
+    let saved = 0;
+    for (const p of posts) {
+      const postObj = {
+        avatar_id:     config.avatar?.id,
+        legenda:       p.legenda,
+        hashtags:      p.hashtags || '',
+        plataformas:   config.plats,
+        tipo_conteudo: config.tipo,
+        campanha_id:   campId,
+        status:        'agendado',
+        agendado_para: p._scheduledAt ? new Date(p._scheduledAt).toISOString() : null,
+      };
+      if (isVideo) postObj.modelo_video = config.avatar?.nicho || null;
+
+      const { error: postErr } = await DB.upsertPost(postObj);
+      if (postErr) throw new Error(`Erro no post ${p.dia}: ${postErr.message || postErr}`);
+      saved++;
+    }
+
+    // 3. Actualizar estado local
+    if (!_aiCampWizard.existingCampId) {
+      _campState.items = [savedCamp || { id: campId, ...campObj }, ..._campState.items];
+    }
+
+    app.closeModal();
+    app.toast(`Campanha criada com ${saved} posts agendados! Prompts de ${isVideo ? 'vídeo' : 'imagem'} guardados — gera as imagens na Fila.`, 'success');
+    _campFilter();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="fa-solid fa-calendar-plus"></i> Confirmar e Agendar';
+  }
 }

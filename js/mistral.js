@@ -13,7 +13,7 @@ const AI = (() => {
   function vidModel() { return Config.get('VIDEO_MODEL') || 'fal-ai/wan/v2.1/t2v-480p'; }
 
   /* ── Texto / Visão ── */
-  async function generateText(prompt, { temperature = 0.8, maxTokens = 1024, images = [] } = {}) {
+  async function generateText(prompt, { temperature = 0.8, maxTokens = 1024, images = [], system = null } = {}) {
     if (!key()) throw new Error('Mistral API key não configurada.');
 
     const hasImages = images && images.length > 0;
@@ -32,6 +32,10 @@ const AI = (() => {
       content = prompt;
     }
 
+    const messages = [];
+    if (system) messages.push({ role: 'system', content: system });
+    messages.push({ role: 'user', content });
+
     const res = await fetch(`${BASE}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -40,7 +44,7 @@ const AI = (() => {
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content }],
+        messages,
         temperature,
         max_tokens: maxTokens
       })
@@ -260,6 +264,117 @@ Regras:
     return generateText(prompt, { temperature: 0.7, maxTokens: 200 });
   }
 
+  /**
+   * Gera N ideias de vídeos curtos para um tema/nicho.
+   * Cada ideia inclui título, gancho de abertura e breve descrição.
+   * @returns {Array} [{ titulo, hook, descricao }]
+   */
+  async function generateVideoIdeas(avatar, topic, count = 5) {
+    const system = `És um especialista em vídeos curtos virais para TikTok, Instagram Reels e YouTube Shorts.
+Avatar: ${avatar.nome || 'Creator'} | Nicho: ${avatar.nicho || 'geral'} | Personalidade: ${avatar.prompt_base || 'criativo, autêntico'}
+
+Responde APENAS com um array JSON válido (sem texto antes nem depois):
+[
+  { "titulo": "título curto e cativante (max 60 chars)", "hook": "primeira frase de abertura viral (max 15 palavras)", "descricao": "o que mostra o vídeo em 1 frase" }
+]`;
+    const raw = await generateText(
+      `Gera ${count} ideias de vídeos curtos sobre: "${topic}"`,
+      { temperature: 0.9, maxTokens: 900, system }
+    );
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('A IA não devolveu JSON válido. Tenta novamente.');
+    return JSON.parse(match[0]);
+  }
+
+  /**
+   * Gera um gancho viral de abertura para um vídeo curto (2 frases máx).
+   * @returns {string}
+   */
+  async function generateVideoHook(avatar, topic) {
+    const system = `És um especialista em ganchos virais para vídeos curtos (TikTok/Reels/Shorts).
+Avatar: ${avatar.nome || 'Creator'} | Nicho: ${avatar.nicho || 'geral'} | Tom: ${avatar.prompt_base || 'autêntico'}
+
+Regras do gancho:
+- Máximo 2 frases (15-20 palavras no total)
+- Cria curiosidade, surpresa ou urgência imediata
+- Faz quem vê querer continuar a ver
+- Tom natural, como alguém a falar para a câmara
+- Sem clichês ("Olá pessoal!", "Hoje vou mostrar-vos...")
+Devolve APENAS o texto do gancho, sem aspas nem explicações.`;
+    return generateText(
+      `Cria um gancho de abertura para um vídeo sobre: "${topic}"`,
+      { temperature: 0.95, maxTokens: 80, system }
+    );
+  }
+
+  /**
+   * Gera um script estruturado (3 partes) para um vídeo curto de 30-60 segundos.
+   * @returns {{ gancho, desenvolvimento, cta }}
+   */
+  async function generateShortScript(avatar, idea, existingHook = '') {
+    const system = `És um criador de scripts para vídeos curtos de 30-60 segundos (TikTok/Reels/Shorts).
+Avatar: ${avatar.nome || 'Creator'} | Nicho: ${avatar.nicho || 'geral'} | Personalidade: ${avatar.prompt_base || 'criativo'}
+
+Responde APENAS com JSON válido:
+{
+  "gancho": "abertura que prende atenção em 5-10 segundos",
+  "desenvolvimento": "3-5 pontos curtos separados por • para o conteúdo principal (20-40 seg)",
+  "cta": "chamada à acção final natural e directa (5-10 seg)"
+}`;
+    const raw = await generateText(
+      `Cria um script estruturado para o vídeo: "${idea}"${existingHook ? `\nGancho já definido: "${existingHook}"` : ''}`,
+      { temperature: 0.85, maxTokens: 500, system }
+    );
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('A IA não devolveu JSON válido. Tenta novamente.');
+    return JSON.parse(match[0]);
+  }
+
+  /**
+   * Gera um post completo a partir de um único prompt do utilizador,
+   * usando posts anteriores do avatar e referências da biblioteca como contexto.
+   *
+   * @param {object} avatar            — avatar activo (nome, nicho, prompt_base)
+   * @param {string} userPrompt        — tema/ideia do utilizador
+   * @param {Array}  previousPosts     — últimos posts do avatar [{legenda, hashtags}]
+   * @param {Array}  referencePrompts  — referências da biblioteca [{titulo, prompt}]
+   * @returns {{ legenda, hashtags, imagem_prompt }}
+   */
+  async function generatePostFromPrompt(avatar, userPrompt, previousPosts = [], referencePrompts = []) {
+    const postsCtx = previousPosts.length
+      ? '\n\nEstilo baseado em posts anteriores deste avatar (mantém o mesmo tom e voz):\n' +
+        previousPosts.slice(0, 5).map(p =>
+          `• "${(p.legenda || '').slice(0, 200)}"`
+        ).join('\n')
+      : '';
+
+    const refsCtx = referencePrompts.length
+      ? '\n\nReferências visuais / estilo da biblioteca:\n' +
+        referencePrompts.map(r =>
+          `• ${r.titulo || ''}: ${(r.prompt || '').slice(0, 150)}`
+        ).join('\n')
+      : '';
+
+    const system = `És um criador de conteúdo profissional para redes sociais.
+Avatar: ${avatar.nome || 'Creator'} | Nicho: ${avatar.nicho || 'geral'} | Personalidade: ${avatar.prompt_base || 'criativo, autêntico, envolvente'}${postsCtx}${refsCtx}
+
+Responde APENAS com JSON válido (sem texto antes nem depois):
+{
+  "legenda": "legenda completa (2-4 frases, emotiva, chamada à acção subtil, tom do avatar)",
+  "hashtags": "#tag1 #tag2 ... (20 hashtags relevantes com #)",
+  "imagem_prompt": "English prompt for AI image generation (detailed, cinematic, no text in image, max 80 words)"
+}`;
+
+    const raw = await generateText(
+      `Cria um post completo sobre: ${userPrompt}`,
+      { temperature: 0.85, maxTokens: 700, system }
+    );
+
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('A IA não devolveu JSON válido. Tenta novamente.');
+    return JSON.parse(match[0]);
+  }
+
   /* Resumo semanal IA — recebe um objecto com dados da semana */
   async function generateWeeklySummary(weekData) {
     const prompt = `
@@ -285,6 +400,55 @@ Tom: profissional mas encorajador. Responde em português.
     return generateText(prompt, { temperature: 0.8, maxTokens: 600 });
   }
 
+  /**
+   * Gera N posts para uma campanha semanal a partir de um único prompt.
+   * Usa os posts anteriores do avatar como contexto de estilo.
+   *
+   * @param {object} avatar        — avatar activo (nome, nicho, prompt_base)
+   * @param {string} campPrompt    — tema/prompt da campanha
+   * @param {object} options       — { count, contentType, prevPosts }
+   * @returns {Array}              — [{ dia, titulo, legenda, hashtags, prompt_media }]
+   */
+  async function generateCampaignPosts(avatar, campPrompt, { count = 5, contentType = 'imagem', prevPosts = [] } = {}) {
+    const styleCtx = prevPosts.length
+      ? '\n\nReferência de estilo (posts anteriores do avatar — mantém o mesmo tom e voz):\n' +
+        prevPosts.slice(0, 4).map(p => `• "${(p.legenda || '').slice(0, 180)}"`).join('\n')
+      : '';
+
+    const mediaRule = contentType === 'video'
+      ? 'English prompt for AI short video generation (cinematic, vertical 9:16, no text overlay, max 80 words)'
+      : 'English prompt for AI image generation (photorealistic, high quality, no text in image, max 80 words)';
+
+    const system = `És um especialista em planeamento de conteúdo para redes sociais.
+Avatar: ${avatar.nome || 'Creator'} | Nicho: ${avatar.nicho || 'geral'} | Personalidade: ${avatar.prompt_base || 'criativo, autêntico'}${styleCtx}
+
+Gera ${count} posts para uma campanha. Regras:
+- Cada post aborda um ângulo diferente do tema da campanha
+- Progressão narrativa: introdução → desenvolvimento → impacto/CTA
+- Tom e voz consistentes com o avatar ao longo de todos os posts
+- Os posts formam uma série coerente, mas cada um funciona de forma autónoma
+- "dia" representa a ordem de publicação (1 a ${count})
+
+Responde APENAS com array JSON válido (sem texto antes nem depois):
+[
+  {
+    "dia": 1,
+    "titulo": "ângulo/tema deste post (1 linha curta)",
+    "legenda": "legenda completa (2-4 frases, emotiva, chamada à acção subtil)",
+    "hashtags": "#tag1 #tag2 ... (15-20 hashtags relevantes com #)",
+    "prompt_media": "${mediaRule}"
+  }
+]`;
+
+    const raw = await generateText(
+      `Cria ${count} posts para uma campanha sobre: "${campPrompt}"`,
+      { temperature: 0.85, maxTokens: 3000, system }
+    );
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('A IA não devolveu JSON válido. Tenta novamente.');
+    return JSON.parse(match[0]);
+  }
+
   return {
     generateText,
     generateImage,
@@ -296,5 +460,10 @@ Tom: profissional mas encorajador. Responde em português.
     generateImagePrompt,
     generateVideoPrompt,
     generateWeeklySummary,
+    generatePostFromPrompt,
+    generateVideoIdeas,
+    generateVideoHook,
+    generateShortScript,
+    generateCampaignPosts,
   };
 })();
