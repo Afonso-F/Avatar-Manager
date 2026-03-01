@@ -24,18 +24,44 @@ async function renderPagamentos(container) {
     <div class="section-header">
       <div>
         <div class="section-title">Pagamentos</div>
-        <div class="section-subtitle">Levantamentos para conta bancária via Stripe Connect</div>
+        <div class="section-subtitle">Levantamentos automáticos diários via Stripe Connect</div>
       </div>
       <button class="btn btn-primary" onclick="_pagamentos.novaContaBancaria()">
         <i class="fa-solid fa-plus"></i> Nova Conta Bancária
       </button>
     </div>
 
-    <!-- Stripe balance card -->
+    <!-- Stripe balance cards -->
     <div id="pagamentos-balance" class="stats-grid mb-3" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
       <div class="stat-card">
         <div class="stat-label"><i class="fa-brands fa-stripe"></i> A carregar saldo…</div>
         <div class="stat-value">—</div>
+      </div>
+    </div>
+
+    <!-- Payout automático da conta principal -->
+    <div class="card mb-3" style="border-left:3px solid var(--accent)">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">
+          <i class="fa-solid fa-building-columns" style="color:var(--accent)"></i>
+          <div>
+            <strong>Payout Diário — Conta Principal Stripe</strong>
+            <div class="text-sm text-muted">Transfere o saldo disponível da conta Stripe principal directamente para a tua conta bancária todos os dias às 02:00 UTC.</div>
+          </div>
+        </div>
+        <div id="main-payout-status" style="font-size:.8rem;color:var(--text-muted)">A verificar…</div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <label class="form-label" style="margin-bottom:4px">ID da Conta Bancária Stripe <span class="text-muted text-sm">(ba_xxx)</span></label>
+          <input id="main-bank-acct-id" class="form-control" placeholder="ba_1A2B3C…"
+                 value="${escHtml(Config.get('STRIPE_MAIN_BANK_ACCOUNT_ID') || '')}"
+                 style="max-width:340px">
+          <div class="form-hint">Regista o ID <code>ba_xxx</code> da tua conta bancária no Stripe Dashboard e coloca aqui. O job diário irá criar payouts automaticamente.</div>
+        </div>
+        <button class="btn btn-primary" onclick="_pagamentos.saveMainBankAccount()">
+          <i class="fa-solid fa-floppy-disk"></i> Guardar
+        </button>
       </div>
     </div>
 
@@ -54,6 +80,7 @@ async function renderPagamentos(container) {
 
   // Load balance and first tab
   _pagamentos.loadBalance();
+  _pagamentos.loadMainPayoutStatus();
   _pagamentos.loadTab('avatares');
 }
 
@@ -174,14 +201,28 @@ const _pagamentos = (() => {
     const contasHtml = contas.length
       ? contas.map(c => `
           <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-muted)">
-            <div>
-              <div style="font-weight:600">${escHtml(c.titular)}</div>
+            <div style="flex:1">
+              <div style="font-weight:600;display:flex;align-items:center;gap:8px">
+                ${escHtml(c.titular)}
+                ${c.auto_daily_payout
+                  ? `<span class="badge badge-green" title="Payout automático diário activo"><i class="fa-solid fa-rotate"></i> Auto-payout</span>`
+                  : ''}
+              </div>
               <div class="text-sm text-muted">${escHtml(c.banco || '')} · IBAN: ${escHtml(c.iban || '').replace(/(.{4})/g,'$1 ').trim()}</div>
-              ${c.stripe_external_account_id ? `<div class="text-sm" style="color:var(--green)"><i class="fa-solid fa-circle-check"></i> Stripe: ${escHtml(c.stripe_external_account_id)}</div>` : ''}
+              ${c.stripe_account_id ? `<div class="text-sm text-muted">Connect: <code>${escHtml(c.stripe_account_id)}</code></div>` : ''}
+              ${c.stripe_external_account_id ? `<div class="text-sm" style="color:var(--green)"><i class="fa-solid fa-circle-check"></i> Stripe bank: ${escHtml(c.stripe_external_account_id)}</div>` : ''}
             </div>
-            <button class="btn btn-sm btn-danger" onclick="_pagamentos.deleteContaBancaria('${c.id}','${entityId}','${tipo}')">
-              <i class="fa-solid fa-trash"></i>
-            </button>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="btn btn-sm ${c.auto_daily_payout ? 'btn-primary' : 'btn-secondary'}"
+                      title="${c.auto_daily_payout ? 'Desactivar payout automático' : 'Activar payout automático diário'}"
+                      onclick="_pagamentos.toggleAutoPayout('${c.id}','${entityId}','${tipo}',${c.auto_daily_payout})">
+                <i class="fa-solid fa-${c.auto_daily_payout ? 'toggle-on' : 'toggle-off'}"></i>
+                ${c.auto_daily_payout ? 'Auto ON' : 'Auto OFF'}
+              </button>
+              <button class="btn btn-sm btn-danger" onclick="_pagamentos.deleteContaBancaria('${c.id}','${entityId}','${tipo}')">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
           </div>`).join('')
       : '<div class="text-sm text-muted">Sem contas bancárias registadas.</div>';
 
@@ -395,6 +436,54 @@ const _pagamentos = (() => {
     await toggleEntity(entityId, tipo);
   }
 
+  /* ── Auto-payout toggle ── */
+  async function toggleAutoPayout(contaId, entityId, tipo, currentValue) {
+    const newValue = !currentValue;
+    const { error } = await DB.upsertContaBancaria({ id: contaId, auto_daily_payout: newValue });
+    if (error) { app.toast('Erro: ' + (error.message || error), 'error'); return; }
+    app.toast(
+      newValue
+        ? 'Payout automático diário activado! O job irá correr às 02:00 UTC.'
+        : 'Payout automático desactivado.',
+      'success'
+    );
+    await toggleEntity(entityId, tipo);
+    await toggleEntity(entityId, tipo);
+  }
+
+  /* ── Main Stripe account payout ── */
+  async function loadMainPayoutStatus() {
+    const el = document.getElementById('main-payout-status');
+    if (!el) return;
+    const mainAcct = Config.get('STRIPE_MAIN_BANK_ACCOUNT_ID');
+    if (!mainAcct) {
+      el.innerHTML = '<span style="color:var(--text-muted)"><i class="fa-solid fa-circle-xmark"></i> Não configurado</span>';
+      return;
+    }
+    try {
+      const balance = await Stripe.getBalance();
+      const available = (balance.available || []);
+      if (!available.length) {
+        el.innerHTML = '<span style="color:var(--text-muted)">Saldo: €0,00</span>';
+        return;
+      }
+      const parts = available.map(b =>
+        (b.amount / 100).toLocaleString('pt-PT', { style: 'currency', currency: b.currency.toUpperCase() })
+      );
+      el.innerHTML = `<span style="color:var(--green)"><i class="fa-solid fa-circle-check"></i> Activo · Saldo: ${parts.join(' + ')}</span>`;
+    } catch (e) {
+      el.innerHTML = `<span style="color:var(--red)"><i class="fa-solid fa-circle-xmark"></i> Erro: ${e.message}</span>`;
+    }
+  }
+
+  function saveMainBankAccount() {
+    const val = document.getElementById('main-bank-acct-id')?.value.trim();
+    if (!val) { app.toast('Introduz o ID ba_xxx da tua conta bancária Stripe.', 'warning'); return; }
+    Config.set('STRIPE_MAIN_BANK_ACCOUNT_ID', val);
+    app.toast('ID guardado! Adiciona também STRIPE_MAIN_BANK_ACCOUNT_ID como GitHub Secret para o job diário.', 'success');
+    loadMainPayoutStatus();
+  }
+
   /* ── Levantar (Payout) modal ── */
   async function openLevantar(entityId, tipo, nome) {
     // Load bank accounts for this entity
@@ -503,9 +592,12 @@ const _pagamentos = (() => {
 
   return {
     loadBalance,
+    loadMainPayoutStatus,
+    saveMainBankAccount,
     switchTab,
     loadTab,
     toggleEntity,
+    toggleAutoPayout,
     novaContaBancaria,
     addContaBancaria,
     deleteContaBancaria,

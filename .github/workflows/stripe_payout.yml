@@ -1,9 +1,9 @@
-name: Stripe Connect — Pagamentos Automáticos
+name: Stripe — Payout Automático Diário
 
 on:
   schedule:
-    # Corre todos os dias à meia-noite (UTC)
-    - cron: '0 0 * * *'
+    # Corre todos os dias às 02:00 UTC (após a liquidação de saldos Stripe)
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -14,7 +14,7 @@ on:
 jobs:
   payout:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -25,11 +25,16 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Processar levantamentos pendentes
+      - name: Executar payout automático diário
         env:
-          SUPABASE_URL:       ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY:       ${{ secrets.SUPABASE_KEY }}
-          STRIPE_SECRET_KEY:  ${{ secrets.STRIPE_SECRET_KEY }}
+          SUPABASE_URL:                ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:                ${{ secrets.SUPABASE_KEY }}
+          STRIPE_SECRET_KEY:           ${{ secrets.STRIPE_SECRET_KEY }}
+          # ID ba_xxx da conta bancária registada na conta Stripe principal.
+          # Necessário para o payout directo da plataforma para a tua conta.
+          STRIPE_MAIN_BANK_ACCOUNT_ID: ${{ secrets.STRIPE_MAIN_BANK_ACCOUNT_ID }}
+          # Montante mínimo em cêntimos para activar payout automático (default 1000 = €10).
+          STRIPE_MIN_PAYOUT_CENTS:     ${{ secrets.STRIPE_MIN_PAYOUT_CENTS || '1000' }}
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             python scripts/stripe_payout.py --dry-run
@@ -39,4 +44,9 @@ jobs:
 
       - name: Resumo
         if: always()
-        run: echo "Workflow Stripe concluído — verificar logs acima"
+        run: |
+          echo "Workflow Stripe concluído — verificar logs acima"
+          echo "Fases executadas:"
+          echo "  1. Auto-collect: levantamentos criados para contas com payout automático activo"
+          echo "  2. Pendentes: todos os levantamentos pendentes processados via Stripe Connect"
+          echo "  3. Principal: payout da conta Stripe principal para conta bancária do titular"
