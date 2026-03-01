@@ -400,6 +400,55 @@ Tom: profissional mas encorajador. Responde em português.
     return generateText(prompt, { temperature: 0.8, maxTokens: 600 });
   }
 
+  /**
+   * Gera N posts para uma campanha semanal a partir de um único prompt.
+   * Usa os posts anteriores do avatar como contexto de estilo.
+   *
+   * @param {object} avatar        — avatar activo (nome, nicho, prompt_base)
+   * @param {string} campPrompt    — tema/prompt da campanha
+   * @param {object} options       — { count, contentType, prevPosts }
+   * @returns {Array}              — [{ dia, titulo, legenda, hashtags, prompt_media }]
+   */
+  async function generateCampaignPosts(avatar, campPrompt, { count = 5, contentType = 'imagem', prevPosts = [] } = {}) {
+    const styleCtx = prevPosts.length
+      ? '\n\nReferência de estilo (posts anteriores do avatar — mantém o mesmo tom e voz):\n' +
+        prevPosts.slice(0, 4).map(p => `• "${(p.legenda || '').slice(0, 180)}"`).join('\n')
+      : '';
+
+    const mediaRule = contentType === 'video'
+      ? 'English prompt for AI short video generation (cinematic, vertical 9:16, no text overlay, max 80 words)'
+      : 'English prompt for AI image generation (photorealistic, high quality, no text in image, max 80 words)';
+
+    const system = `És um especialista em planeamento de conteúdo para redes sociais.
+Avatar: ${avatar.nome || 'Creator'} | Nicho: ${avatar.nicho || 'geral'} | Personalidade: ${avatar.prompt_base || 'criativo, autêntico'}${styleCtx}
+
+Gera ${count} posts para uma campanha. Regras:
+- Cada post aborda um ângulo diferente do tema da campanha
+- Progressão narrativa: introdução → desenvolvimento → impacto/CTA
+- Tom e voz consistentes com o avatar ao longo de todos os posts
+- Os posts formam uma série coerente, mas cada um funciona de forma autónoma
+- "dia" representa a ordem de publicação (1 a ${count})
+
+Responde APENAS com array JSON válido (sem texto antes nem depois):
+[
+  {
+    "dia": 1,
+    "titulo": "ângulo/tema deste post (1 linha curta)",
+    "legenda": "legenda completa (2-4 frases, emotiva, chamada à acção subtil)",
+    "hashtags": "#tag1 #tag2 ... (15-20 hashtags relevantes com #)",
+    "prompt_media": "${mediaRule}"
+  }
+]`;
+
+    const raw = await generateText(
+      `Cria ${count} posts para uma campanha sobre: "${campPrompt}"`,
+      { temperature: 0.85, maxTokens: 3000, system }
+    );
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('A IA não devolveu JSON válido. Tenta novamente.');
+    return JSON.parse(match[0]);
+  }
+
   return {
     generateText,
     generateImage,
@@ -415,5 +464,6 @@ Tom: profissional mas encorajador. Responde em português.
     generateVideoIdeas,
     generateVideoHook,
     generateShortScript,
+    generateCampaignPosts,
   };
 })();
