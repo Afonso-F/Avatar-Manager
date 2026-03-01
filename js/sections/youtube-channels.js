@@ -538,23 +538,39 @@ async function saveYoutubeChannel(id) {
     const savedId = saved?.id || id;
     const storagePrefix = savedId || String(Date.now());
     const refUrls = [];
+    let uploadFailed = 0;
+    const newImages = _ytRefImagesState.filter(i => i.isNew && i.dataUrl);
 
-    for (const img of _ytRefImagesState) {
-      if (!img.isNew) {
-        refUrls.push(img.url);
-      } else if (img.dataUrl) {
-        const { url, error: uploadErr } = await DB.uploadYoutubeReferenceImage(img.dataUrl, storagePrefix);
+    // Preservar URLs existentes
+    _ytRefImagesState.filter(i => !i.isNew && i.url).forEach(i => refUrls.push(i.url));
+
+    // Upload de imagens novas com feedback
+    if (newImages.length > 0) {
+      const progressEl = document.getElementById('yt-gen-progress');
+      if (progressEl) progressEl.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> A guardar imagens (0/${newImages.length})…`;
+      for (let i = 0; i < newImages.length; i++) {
+        if (progressEl) progressEl.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> A guardar imagem ${i + 1}/${newImages.length}…`;
+        const { url, error: uploadErr } = await DB.uploadYoutubeReferenceImage(newImages[i].dataUrl, storagePrefix);
         if (uploadErr) {
+          uploadFailed++;
           console.warn('Erro ao fazer upload de imagem de referência do canal:', uploadErr);
         } else {
           refUrls.push(url);
         }
       }
+      if (progressEl) progressEl.innerHTML = '';
     }
 
     if (savedId && refUrls.length > 0) {
       const { error: refErr } = await DB.updateYoutubeRefImages(savedId, refUrls);
-      if (refErr) console.warn('Erro ao guardar imagens de referência:', refErr);
+      if (refErr) {
+        console.warn('Erro ao guardar imagens de referência:', refErr);
+        app.toast('Aviso: imagens do canal não foram guardadas — ' + app.fmtErr(refErr), 'warning');
+      }
+    }
+
+    if (uploadFailed > 0) {
+      app.toast(`${uploadFailed} imagem(ns) não puderam ser guardadas. Verifica o Storage no Supabase.`, 'warning');
     }
   }
 
