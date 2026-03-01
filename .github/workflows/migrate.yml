@@ -23,9 +23,44 @@ jobs:
         with:
           version: latest
 
-      - name: Aplicar migrações
+      - name: Link projeto Supabase
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase link --project-ref fjbqaminivgcyzjrjqsb --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+
+      # As migrações antigas foram aplicadas manualmente via Dashboard.
+      # O CLI não sabe disso → marcamos todas como "applied" para que o
+      # db push só aplique as genuinamente novas.
+      - name: Sincronizar histórico de migrações antigas
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          supabase link --project-ref fjbqaminivgcyzjrjqsb
-          supabase db push --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+          APPLIED=(
+            "20260224184522_new-migration"
+            "20260224191113_master_user"
+            "20260224210000_storage_bucket"
+            "20260224220000_video_and_refs"
+            "20260225_avatares_v2"
+            "20260225_campanhas"
+            "20260225_digital_content"
+            "20260225_monetizacao_platforms"
+            "20260225_new_features"
+            "20260225_posts_error_msg"
+            "20260225_prompt_library"
+            "20260225_video_channels_platform"
+            "20260226_ensure_avatares_columns"
+            "20260226_youtube_channels_avatar_id"
+            "20260226_youtube_channels_refs"
+            "20260227_pagamentos_stripe"
+          )
+          for v in "${APPLIED[@]}"; do
+            supabase migration repair --status applied "$v" \
+              --password "${{ secrets.SUPABASE_DB_PASSWORD }}" \
+              && echo "✓ $v marcada" \
+              || echo "⚠ $v ignorada (já marcada ou não encontrada)"
+          done
+
+      - name: Aplicar migrações pendentes
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase db push --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
