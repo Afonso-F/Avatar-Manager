@@ -9,6 +9,7 @@ const app = (() => {
     youtube:        { title: 'Canais de Vídeo',   fn: 'renderYoutube' },
     musicos:        { title: 'Músicos & Bandas',  fn: 'renderMusicos' },
     criar:          { title: 'Criar Post',        fn: 'renderCriarPost' },
+    videos:         { title: 'Vídeos Curtos',     fn: 'renderVideosCurtos' },
     fila:           { title: 'Fila / Agenda',     fn: 'renderFila' },
     publicados:     { title: 'Publicados',        fn: 'renderPublicados' },
     biblioteca:     { title: 'Biblioteca',        fn: 'renderBiblioteca' },

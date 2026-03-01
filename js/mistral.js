@@ -265,6 +265,72 @@ Regras:
   }
 
   /**
+   * Gera N ideias de vídeos curtos para um tema/nicho.
+   * Cada ideia inclui título, gancho de abertura e breve descrição.
+   * @returns {Array} [{ titulo, hook, descricao }]
+   */
+  async function generateVideoIdeas(avatar, topic, count = 5) {
+    const system = `És um especialista em vídeos curtos virais para TikTok, Instagram Reels e YouTube Shorts.
+Avatar: ${avatar.nome || 'Creator'} | Nicho: ${avatar.nicho || 'geral'} | Personalidade: ${avatar.prompt_base || 'criativo, autêntico'}
+
+Responde APENAS com um array JSON válido (sem texto antes nem depois):
+[
+  { "titulo": "título curto e cativante (max 60 chars)", "hook": "primeira frase de abertura viral (max 15 palavras)", "descricao": "o que mostra o vídeo em 1 frase" }
+]`;
+    const raw = await generateText(
+      `Gera ${count} ideias de vídeos curtos sobre: "${topic}"`,
+      { temperature: 0.9, maxTokens: 900, system }
+    );
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('A IA não devolveu JSON válido. Tenta novamente.');
+    return JSON.parse(match[0]);
+  }
+
+  /**
+   * Gera um gancho viral de abertura para um vídeo curto (2 frases máx).
+   * @returns {string}
+   */
+  async function generateVideoHook(avatar, topic) {
+    const system = `És um especialista em ganchos virais para vídeos curtos (TikTok/Reels/Shorts).
+Avatar: ${avatar.nome || 'Creator'} | Nicho: ${avatar.nicho || 'geral'} | Tom: ${avatar.prompt_base || 'autêntico'}
+
+Regras do gancho:
+- Máximo 2 frases (15-20 palavras no total)
+- Cria curiosidade, surpresa ou urgência imediata
+- Faz quem vê querer continuar a ver
+- Tom natural, como alguém a falar para a câmara
+- Sem clichês ("Olá pessoal!", "Hoje vou mostrar-vos...")
+Devolve APENAS o texto do gancho, sem aspas nem explicações.`;
+    return generateText(
+      `Cria um gancho de abertura para um vídeo sobre: "${topic}"`,
+      { temperature: 0.95, maxTokens: 80, system }
+    );
+  }
+
+  /**
+   * Gera um script estruturado (3 partes) para um vídeo curto de 30-60 segundos.
+   * @returns {{ gancho, desenvolvimento, cta }}
+   */
+  async function generateShortScript(avatar, idea, existingHook = '') {
+    const system = `És um criador de scripts para vídeos curtos de 30-60 segundos (TikTok/Reels/Shorts).
+Avatar: ${avatar.nome || 'Creator'} | Nicho: ${avatar.nicho || 'geral'} | Personalidade: ${avatar.prompt_base || 'criativo'}
+
+Responde APENAS com JSON válido:
+{
+  "gancho": "abertura que prende atenção em 5-10 segundos",
+  "desenvolvimento": "3-5 pontos curtos separados por • para o conteúdo principal (20-40 seg)",
+  "cta": "chamada à acção final natural e directa (5-10 seg)"
+}`;
+    const raw = await generateText(
+      `Cria um script estruturado para o vídeo: "${idea}"${existingHook ? `\nGancho já definido: "${existingHook}"` : ''}`,
+      { temperature: 0.85, maxTokens: 500, system }
+    );
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('A IA não devolveu JSON válido. Tenta novamente.');
+    return JSON.parse(match[0]);
+  }
+
+  /**
    * Gera um post completo a partir de um único prompt do utilizador,
    * usando posts anteriores do avatar e referências da biblioteca como contexto.
    *
@@ -346,5 +412,8 @@ Tom: profissional mas encorajador. Responde em português.
     generateVideoPrompt,
     generateWeeklySummary,
     generatePostFromPrompt,
+    generateVideoIdeas,
+    generateVideoHook,
+    generateShortScript,
   };
 })();
