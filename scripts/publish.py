@@ -367,7 +367,7 @@ def main():
             f"{errors} post(s) não publicados — marcados como 'erro' na base de dados. "
             "Verifica se os tokens (INSTAGRAM_TOKEN, TIKTOK_TOKEN, etc.) estão configurados."
         )
-    sys.exit(0)
+    sys.exit(1 if errors > 0 else 0)
 
 
 if __name__ == '__main__':
