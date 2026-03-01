@@ -13,7 +13,7 @@ const AI = (() => {
   function vidModel() { return Config.get('VIDEO_MODEL') || 'fal-ai/wan/v2.1/t2v-480p'; }
 
   /* ── Texto / Visão ── */
-  async function generateText(prompt, { temperature = 0.8, maxTokens = 1024, images = [] } = {}) {
+  async function generateText(prompt, { temperature = 0.8, maxTokens = 1024, images = [], system = null } = {}) {
     if (!key()) throw new Error('Mistral API key não configurada.');
 
     const hasImages = images && images.length > 0;
@@ -32,6 +32,10 @@ const AI = (() => {
       content = prompt;
     }
 
+    const messages = [];
+    if (system) messages.push({ role: 'system', content: system });
+    messages.push({ role: 'user', content });
+
     const res = await fetch(`${BASE}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -40,7 +44,7 @@ const AI = (() => {
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content }],
+        messages,
         temperature,
         max_tokens: maxTokens
       })
@@ -260,6 +264,51 @@ Regras:
     return generateText(prompt, { temperature: 0.7, maxTokens: 200 });
   }
 
+  /**
+   * Gera um post completo a partir de um único prompt do utilizador,
+   * usando posts anteriores do avatar e referências da biblioteca como contexto.
+   *
+   * @param {object} avatar            — avatar activo (nome, nicho, prompt_base)
+   * @param {string} userPrompt        — tema/ideia do utilizador
+   * @param {Array}  previousPosts     — últimos posts do avatar [{legenda, hashtags}]
+   * @param {Array}  referencePrompts  — referências da biblioteca [{titulo, prompt}]
+   * @returns {{ legenda, hashtags, imagem_prompt }}
+   */
+  async function generatePostFromPrompt(avatar, userPrompt, previousPosts = [], referencePrompts = []) {
+    const postsCtx = previousPosts.length
+      ? '\n\nEstilo baseado em posts anteriores deste avatar (mantém o mesmo tom e voz):\n' +
+        previousPosts.slice(0, 5).map(p =>
+          `• "${(p.legenda || '').slice(0, 200)}"`
+        ).join('\n')
+      : '';
+
+    const refsCtx = referencePrompts.length
+      ? '\n\nReferências visuais / estilo da biblioteca:\n' +
+        referencePrompts.map(r =>
+          `• ${r.titulo || ''}: ${(r.prompt || '').slice(0, 150)}`
+        ).join('\n')
+      : '';
+
+    const system = `És um criador de conteúdo profissional para redes sociais.
+Avatar: ${avatar.nome || 'Creator'} | Nicho: ${avatar.nicho || 'geral'} | Personalidade: ${avatar.prompt_base || 'criativo, autêntico, envolvente'}${postsCtx}${refsCtx}
+
+Responde APENAS com JSON válido (sem texto antes nem depois):
+{
+  "legenda": "legenda completa (2-4 frases, emotiva, chamada à acção subtil, tom do avatar)",
+  "hashtags": "#tag1 #tag2 ... (20 hashtags relevantes com #)",
+  "imagem_prompt": "English prompt for AI image generation (detailed, cinematic, no text in image, max 80 words)"
+}`;
+
+    const raw = await generateText(
+      `Cria um post completo sobre: ${userPrompt}`,
+      { temperature: 0.85, maxTokens: 700, system }
+    );
+
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('A IA não devolveu JSON válido. Tenta novamente.');
+    return JSON.parse(match[0]);
+  }
+
   /* Resumo semanal IA — recebe um objecto com dados da semana */
   async function generateWeeklySummary(weekData) {
     const prompt = `
@@ -296,5 +345,6 @@ Tom: profissional mas encorajador. Responde em português.
     generateImagePrompt,
     generateVideoPrompt,
     generateWeeklySummary,
+    generatePostFromPrompt,
   };
 })();
