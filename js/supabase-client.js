@@ -453,6 +453,42 @@ const DB = (() => {
     return _client.from('post_templates').delete().eq('id', id);
   }
 
+  /* ── Contas Bancárias (para pagamentos / levantamentos) ── */
+  async function getContasBancarias({ avatar_id, youtube_channel_id } = {}) {
+    if (!_client) return { data: [], error: 'not connected' };
+    let q = _client.from('contas_bancarias').select('*').order('criado_em', { ascending: false });
+    if (avatar_id)          q = q.eq('avatar_id', avatar_id);
+    if (youtube_channel_id) q = q.eq('youtube_channel_id', youtube_channel_id);
+    return q;
+  }
+
+  async function upsertContaBancaria(conta) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('contas_bancarias').upsert(conta).select().single();
+  }
+
+  async function deleteContaBancaria(id) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('contas_bancarias').delete().eq('id', id);
+  }
+
+  /* ── Levantamentos (histórico de pagamentos) ── */
+  async function getLevantamentos({ avatar_id, youtube_channel_id, limit = 50 } = {}) {
+    if (!_client) return { data: [], error: 'not connected' };
+    let q = _client.from('levantamentos')
+      .select('*, contas_bancarias(titular, banco)')
+      .order('criado_em', { ascending: false })
+      .limit(limit);
+    if (avatar_id)          q = q.eq('avatar_id', avatar_id);
+    if (youtube_channel_id) q = q.eq('youtube_channel_id', youtube_channel_id);
+    return q;
+  }
+
+  async function upsertLevantamento(levantamento) {
+    if (!_client) return { error: 'not connected' };
+    return _client.from('levantamentos').upsert(levantamento).select().single();
+  }
+
   /* Upload de URL de vídeo externo (fal.ai) directamente como URL */
   async function uploadPostVideoFromUrl(videoUrl, filename) {
     if (!_client) return { error: 'not connected' };
@@ -471,5 +507,5 @@ const DB = (() => {
     }
   }
 
-  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, updateYoutubeRefImages, uploadYoutubeReferenceImage, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage, getOnlyfansStats, upsertOnlyfansStats, getPatreonStats, upsertPatreonStats, getTwitchStats, upsertTwitchStats, getAfiliados, upsertAfiliado, deleteAfiliado, getVendasDiretas, upsertVendaDireta, deleteVendaDireta };
+  return { init, client, ready, getAvatares, upsertAvatar, deleteAvatar, updateAvatarRefImages, getPosts, upsertPost, deletePost, updatePostStatus, getPublicados, getAnalytics, getContas, upsertConta, deleteConta, signIn, signOut, getSession, onAuthStateChange, uploadPostImage, uploadAvatarReferenceImage, uploadPostVideo, uploadPostVideoFromUrl, getYoutubeChannels, upsertYoutubeChannel, deleteYoutubeChannel, updateYoutubeRefImages, uploadYoutubeReferenceImage, getYoutubeVideos, upsertYoutubeVideo, deleteYoutubeVideo, getMusicos, upsertMusico, deleteMusico, getMusicoTracks, upsertMusicoTrack, deleteMusicoTrack, getFanslyStats, upsertFanslyStats, getDespesas, upsertDespesa, deleteDespesa, getCampanhas, upsertCampanha, deleteCampanha, getPostTemplates, upsertPostTemplate, deletePostTemplate, getPromptLibrary, upsertPromptEntry, deletePromptEntry, incrementPromptUsage, uploadLibraryImage, getOnlyfansStats, upsertOnlyfansStats, getPatreonStats, upsertPatreonStats, getTwitchStats, upsertTwitchStats, getAfiliados, upsertAfiliado, deleteAfiliado, getVendasDiretas, upsertVendaDireta, deleteVendaDireta, getContasBancarias, upsertContaBancaria, deleteContaBancaria, getLevantamentos, upsertLevantamento };
 })();

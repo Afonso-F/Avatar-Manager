@@ -253,6 +253,270 @@ describe('buildPublicadosCsv() — exportar publicados', () => {
   });
 });
 
+/* ══════════════════════════════════════════════════════════════════
+   Funções copiadas de avatares.js
+   ══════════════════════════════════════════════════════════════════ */
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function platformLabel(p) {
+  const labels = {
+    instagram: 'Instagram', tiktok: 'TikTok', facebook: 'Facebook',
+    youtube: 'YouTube', fansly: 'Fansly', onlyfans: 'OnlyFans',
+    patreon: 'Patreon', twitch: 'Twitch', spotify: 'Spotify',
+    vimeo: 'Vimeo', rumble: 'Rumble', dailymotion: 'Dailymotion',
+  };
+  return labels[p] || p.charAt(0).toUpperCase() + p.slice(1);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Lógica de filtragem da fila (extraída de fila.js)
+   ══════════════════════════════════════════════════════════════════ */
+function filterPosts(allPosts, { tab = 'all', avatarId = '', search = '' } = {}) {
+  return (allPosts || []).filter(p => {
+    if (tab !== 'all' && p.status !== tab) return false;
+    if (avatarId && String(p.avatar_id) !== String(avatarId)) return false;
+    if (search && !(p.legenda || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+}
+
+const FILA_PAGE_SIZE = 10;
+function paginatePosts(posts, page, pageSize = FILA_PAGE_SIZE) {
+  const total = posts.length;
+  const paginated = posts.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = Math.ceil(total / pageSize);
+  return { paginated, total, totalPages };
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Cálculos de receita (extraídos de monetizacao.js)
+   ══════════════════════════════════════════════════════════════════ */
+function calcReceitaFansly(stats) {
+  return stats.reduce((s, f) => s + (parseFloat(f.receita) || 0) + (parseFloat(f.tips) || 0), 0);
+}
+function calcReceitaOnlyfans(stats) {
+  return stats.reduce((s, f) => s + (parseFloat(f.receita) || 0) + (parseFloat(f.tips) || 0) + (parseFloat(f.ppv_receita) || 0), 0);
+}
+function calcReceitaVendas(vendas, mesAtual) {
+  const mesAtualStr = mesAtual.slice(0, 7);
+  return vendas
+    .filter(v => (v.data || '').startsWith(mesAtualStr))
+    .reduce((s, v) => s + (parseFloat(v.receita_total) || 0), 0);
+}
+function calcTwitchMes(stats) {
+  if (!stats[0]) return 0;
+  return (parseFloat(stats[0].bits_receita) || 0) +
+         (parseFloat(stats[0].donations_receita) || 0) +
+         (parseFloat(stats[0].ad_receita) || 0);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Parsing de JSON de legendas IA (extraído de mistral.js)
+   ══════════════════════════════════════════════════════════════════ */
+function parseCaptionsResponse(raw) {
+  try {
+    const match = raw.match(/\{[\s\S]*\}/);
+    return JSON.parse(match?.[0] || raw);
+  } catch {
+    return { instagram: raw, tiktok: raw, youtube: raw, facebook: raw };
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Lógica de Config (com localStorage/sessionStorage real do browser)
+   ══════════════════════════════════════════════════════════════════ */
+function makeConfigWithStorage(ls) {
+  const KEYS = {
+    MISTRAL: 'as_mistral_key', SUPABASE_URL: 'as_supabase_url',
+    SUPABASE_KEY: 'as_supabase_key', FAL_AI: 'as_fal_ai_key',
+  };
+  const DEFAULTS = {
+    SUPABASE_URL: 'https://fjbqaminivgcyzjrjqsb.supabase.co',
+    SUPABASE_KEY: 'sb_publishable_ERR4k-d8X5sAohBSlxlptw_rfpTH2fb',
+  };
+  function get(key) { return ls.getItem(KEYS[key]) || DEFAULTS[key] || ''; }
+  function set(key, value) { ls.setItem(KEYS[key], value.trim()); }
+  function isReady() { return !!(get('MISTRAL') && get('SUPABASE_URL') && get('SUPABASE_KEY')); }
+  return { get, set, isReady, KEYS };
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TESTES ADICIONAIS
+   ══════════════════════════════════════════════════════════════════ */
+
+describe('escHtml() — segurança XSS', () => {
+  it('escapa & para &amp;',                 () => expect(escHtml('a & b')).toBe('a &amp; b'));
+  it('escapa " para &quot;',               () => expect(escHtml('"citação"')).toBe('&quot;citação&quot;'));
+  it('escapa < para &lt;',                 () => expect(escHtml('<script>')).toBe('&lt;script&gt;'));
+  it('escapa > para &gt;',                 () => expect(escHtml('x > y')).toBe('x &gt; y'));
+  it('retorna "" para null',               () => expect(escHtml(null)).toBe(''));
+  it('retorna "" para undefined',          () => expect(escHtml(undefined)).toBe(''));
+  it('passa strings seguras sem alteração',() => expect(escHtml('olá mundo')).toBe('olá mundo'));
+  it('previne injecção <script>',         () => {
+    const r = escHtml('<script>alert(1)</script>');
+    expect(r).toNotContain('<script>');
+    expect(r).toContain('&lt;script&gt;');
+  });
+  it('previne XSS via atributo href',     () => {
+    const r = escHtml('https://evil.com" onmouseover="alert(1)');
+    expect(r).toNotContain('" onmouseover="');
+  });
+  it('escapa múltiplos chars de uma vez', () => {
+    expect(escHtml('<a href="x">&foo</a>')).toBe('&lt;a href=&quot;x&quot;&gt;&amp;foo&lt;/a&gt;');
+  });
+});
+
+describe('platformLabel()', () => {
+  it('Instagram',        () => expect(platformLabel('instagram')).toBe('Instagram'));
+  it('TikTok',          () => expect(platformLabel('tiktok')).toBe('TikTok'));
+  it('YouTube',         () => expect(platformLabel('youtube')).toBe('YouTube'));
+  it('OnlyFans',        () => expect(platformLabel('onlyfans')).toBe('OnlyFans'));
+  it('Fansly',          () => expect(platformLabel('fansly')).toBe('Fansly'));
+  it('capitaliza plataforma desconhecida', () => expect(platformLabel('snapchat')).toBe('Snapchat'));
+});
+
+describe('filterPosts() — filtragem da fila', () => {
+  const posts = [
+    { id: '1', status: 'agendado',  avatar_id: '1', legenda: 'Post de verão' },
+    { id: '2', status: 'agendado',  avatar_id: '2', legenda: 'Post de inverno' },
+    { id: '3', status: 'rascunho',  avatar_id: '1', legenda: 'Rascunho natal' },
+    { id: '4', status: 'rascunho',  avatar_id: '2', legenda: 'Outro rascunho' },
+    { id: '5', status: 'erro',      avatar_id: '1', legenda: 'Post com erro' },
+  ];
+
+  it('tab all retorna todos',              () => expect(filterPosts(posts, { tab: 'all' }).length).toBe(5));
+  it('tab agendado retorna 2',             () => expect(filterPosts(posts, { tab: 'agendado' }).length).toBe(2));
+  it('tab rascunho retorna 2',             () => expect(filterPosts(posts, { tab: 'rascunho' }).length).toBe(2));
+  it('tab erro retorna 1',                 () => expect(filterPosts(posts, { tab: 'erro' }).length).toBe(1));
+  it('filtro por avatar "1" retorna 3',    () => expect(filterPosts(posts, { tab: 'all', avatarId: '1' }).length).toBe(3));
+  it('avatar numérico faz match via String()', () => {
+    const p = [{ id: 'x', status: 'agendado', avatar_id: 42, legenda: '' }];
+    expect(filterPosts(p, { tab: 'all', avatarId: '42' }).length).toBe(1);
+  });
+  it('pesquisa case-insensitive',          () => expect(filterPosts(posts, { search: 'VERÃO' }).length).toBe(1));
+  it('pesquisa parcial funciona',          () => expect(filterPosts(posts, { search: 'rascunho' }).length).toBe(2));
+  it('allPosts null retorna []',           () => expect(filterPosts(null, { tab: 'all' }).length).toBe(0));
+  it('tab + avatar + pesquisa combinados', () => {
+    const r = filterPosts(posts, { tab: 'rascunho', avatarId: '1', search: 'natal' });
+    expect(r.length).toBe(1);
+    expect(r[0].id).toBe('3');
+  });
+});
+
+describe('paginatePosts() — paginação', () => {
+  const posts25 = Array.from({ length: 25 }, (_, i) => ({ id: String(i + 1) }));
+
+  it('primeira página tem 10 items',       () => expect(paginatePosts(posts25, 0).paginated.length).toBe(10));
+  it('segunda página começa no item 11',   () => expect(paginatePosts(posts25, 1).paginated[0].id).toBe('11'));
+  it('última página tem 5 items',          () => expect(paginatePosts(posts25, 2).paginated.length).toBe(5));
+  it('total é 25',                         () => expect(paginatePosts(posts25, 0).total).toBe(25));
+  it('totalPages é 3 para 25 items',       () => expect(paginatePosts(posts25, 0).totalPages).toBe(3));
+  it('além da última página retorna []',   () => expect(paginatePosts(posts25, 99).paginated.length).toBe(0));
+  it('lista vazia: total=0, pages=0',      () => {
+    const r = paginatePosts([], 0);
+    expect(r.total).toBe(0);
+    expect(r.totalPages).toBe(0);
+  });
+});
+
+describe('calcReceitaFansly() — cálculos de receita', () => {
+  it('soma receita e tips',                () => expect(calcReceitaFansly([{ receita: '100', tips: '20' }])).toBe(120));
+  it('múltiplas entradas',                 () => expect(calcReceitaFansly([{ receita: '100', tips: '10' }, { receita: '200', tips: '30' }])).toBe(340));
+  it('retorna 0 para array vazio',         () => expect(calcReceitaFansly([])).toBe(0));
+  it('lida com null receita',              () => expect(calcReceitaFansly([{ receita: null, tips: '50' }])).toBe(50));
+  it('lida com undefined tips',            () => expect(calcReceitaFansly([{ receita: '75' }])).toBe(75));
+});
+
+describe('calcReceitaOnlyfans() — cálculos de receita', () => {
+  it('soma receita + tips + ppv',          () => expect(calcReceitaOnlyfans([{ receita: '100', tips: '20', ppv_receita: '50' }])).toBe(170));
+  it('ppv ausente conta como 0',           () => expect(calcReceitaOnlyfans([{ receita: '100', tips: '20' }])).toBe(120));
+  it('retorna 0 para array vazio',         () => expect(calcReceitaOnlyfans([])).toBe(0));
+  it('lida com todos null',                () => expect(calcReceitaOnlyfans([{ receita: null, tips: null, ppv_receita: null }])).toBe(0));
+});
+
+describe('calcReceitaVendas() — filtragem por mês', () => {
+  const vendas = [
+    { data: '2026-02-10', receita_total: '150' },
+    { data: '2026-02-28', receita_total: '200' },
+    { data: '2026-01-15', receita_total: '999' },
+    { data: '2026-03-01', receita_total: '100' },
+  ];
+
+  it('soma só vendas do mês actual',       () => {
+    const r = calcReceitaVendas(vendas, '2026-02-01');
+    expect(Math.abs(r - 350) < 0.01).toBe(true);
+  });
+  it('retorna 0 se sem vendas no mês',     () => expect(calcReceitaVendas(vendas, '2026-04-01')).toBe(0));
+  it('retorna 0 para array vazio',         () => expect(calcReceitaVendas([], '2026-02-01')).toBe(0));
+  it('campo data ausente não conta',       () => expect(calcReceitaVendas([{ receita_total: '100' }], '2026-02-01')).toBe(0));
+});
+
+describe('calcTwitchMes()', () => {
+  it('soma bits + donations + ads',        () => expect(calcTwitchMes([{ bits_receita: '50', donations_receita: '100', ad_receita: '25' }])).toBe(175));
+  it('retorna 0 para array vazio',         () => expect(calcTwitchMes([])).toBe(0));
+  it('usa só primeira entrada',            () => expect(calcTwitchMes([{ bits_receita: '100', donations_receita: '0', ad_receita: '0' }, { bits_receita: '999', donations_receita: '0', ad_receita: '0' }])).toBe(100));
+});
+
+describe('parseCaptionsResponse() — parsing IA', () => {
+  it('analisa JSON válido',               () => {
+    const r = parseCaptionsResponse('{"instagram":"IG","tiktok":"TT","youtube":"YT","facebook":"FB"}');
+    expect(r.instagram).toBe('IG');
+  });
+  it('extrai JSON embutido em texto',     () => {
+    const r = parseCaptionsResponse('Aqui está: {"instagram":"olá","tiktok":"hi","youtube":"hey","facebook":"ho"} fim.');
+    expect(r.instagram).toBe('olá');
+  });
+  it('fallback para raw em JSON inválido',() => {
+    const r = parseCaptionsResponse('not json');
+    expect(r.instagram).toBe('not json');
+    expect(r.tiktok).toBe('not json');
+  });
+  it('retorna 4 plataformas no fallback', () => {
+    const r = parseCaptionsResponse('lixo');
+    expect(Object.keys(r).length).toBe(4);
+  });
+});
+
+describe('Config (browser sessionStorage)', () => {
+  const Config = makeConfigWithStorage({
+    getItem: (k) => sessionStorage.getItem(k),
+    setItem: (k, v) => sessionStorage.setItem(k, v),
+  });
+
+  it('retorna string vazia para chave não definida', () => {
+    sessionStorage.removeItem('as_mistral_key');
+    expect(Config.get('MISTRAL')).toBe('');
+  });
+  it('retorna default SUPABASE_URL', () => {
+    expect(Config.get('SUPABASE_URL')).toContain('supabase.co');
+  });
+  it('set() guarda valor', () => {
+    Config.set('MISTRAL', 'test-key');
+    expect(Config.get('MISTRAL')).toBe('test-key');
+    sessionStorage.removeItem('as_mistral_key');
+  });
+  it('set() faz trim do valor',            () => {
+    Config.set('MISTRAL', '  chave  ');
+    expect(Config.get('MISTRAL')).toBe('chave');
+    sessionStorage.removeItem('as_mistral_key');
+  });
+  it('isReady() false sem MISTRAL key',    () => {
+    sessionStorage.removeItem('as_mistral_key');
+    expect(Config.isReady()).toBe(false);
+  });
+  it('isReady() true com MISTRAL key',     () => {
+    Config.set('MISTRAL', 'sk-test');
+    expect(Config.isReady()).toBe(true);
+    sessionStorage.removeItem('as_mistral_key');
+  });
+});
+
 /* ── Sumário ──────────────────────────────────────────────── */
 const total = _passed + _failed;
 const ok    = _failed === 0;

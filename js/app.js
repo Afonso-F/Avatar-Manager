@@ -16,6 +16,7 @@ const app = (() => {
     analises:       { title: 'Análises',          fn: 'renderAnalises' },
     monetizacao:    { title: 'Monetização',       fn: 'renderMonetizacao' },
     despesas:       { title: 'Despesas',          fn: 'renderDespesas' },
+    pagamentos:     { title: 'Pagamentos',        fn: 'renderPagamentos' },
     configuracoes:  { title: 'Configurações',     fn: 'renderConfiguracoes' },
   };
 
